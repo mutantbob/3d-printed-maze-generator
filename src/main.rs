@@ -61,6 +61,7 @@ impl MazeTopology1 {
             .filter(|n| self.wall_bounds(n))
     }
 
+    #[allow(clippy::needless_lifetimes)] // clippy is wrong.  removing the lifetime triggers an error in my version of rust
     pub(crate) fn all_cells<'a>(&'a self) -> impl Iterator<Item = HexCellAddress> + 'a {
         let mut min_v = 0;
         (0..self.after_max_u).flat_map(move |u| {
@@ -297,14 +298,6 @@ pub fn add_wall_flat(
             blender.add_face(&[v4, v5, v3, v2]);
         }
     }
-}
-
-fn midpoint(p0: (f32, f32), p1: (f32, f32)) -> (f32, f32) {
-    ((p0.0 + p1.0) * 0.5, (p0.1 + p1.1) * 0.5)
-}
-
-fn midpoint3(p0: (f32, f32), p1: (f32, f32), p2: (f32, f32)) -> (f32, f32) {
-    ((p0.0 + p1.0 + p2.0) / 3.0, (p0.1 + p1.1 + p2.1) / 3.0)
 }
 
 //

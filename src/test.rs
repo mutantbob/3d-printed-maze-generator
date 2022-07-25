@@ -1,4 +1,6 @@
-use crate::{HexCellAddress, HexMazeEdge, MazeTopology1};
+use crate::{
+    with_z, CylindricalSpace, HexCellAddress, HexMazeEdge, HexMazeWall, MazeTopology1, Space,
+};
 use assert_approx_eq::assert_approx_eq;
 
 #[test]
@@ -99,7 +101,57 @@ pub fn test_corners_4() {
 pub fn test_topology_1() {
     let topology = MazeTopology1 { after_max_u: 20 };
 
-    let ns: Vec<_> = topology.neighbors(HexCellAddress::new(0, 3)).collect();
+    let ns: Vec<_> = topology.neighbors(&HexCellAddress::new(0, 3)).collect();
 
     assert_eq!(6, ns.len());
+}
+
+#[test]
+pub fn test_harmonize_angle() {
+    let space = CylindricalSpace {
+        r0: 10.0,
+        max_rho: 20.0,
+    };
+
+    let mut r2 = 21.0;
+    space.harmonize_angle(0.0, &mut r2);
+
+    assert_eq!(1.0, r2);
+}
+
+#[test]
+pub fn test_wall() {
+    let low_z = 0.0;
+    let high_z = 0.3;
+
+    let wall = HexMazeWall::new(
+        HexCellAddress::new(19, -9),
+        HexCellAddress::new(0, 1),
+        true,
+        false,
+    );
+    let space = CylindricalSpace {
+        r0: 10.0,
+        max_rho: 20.0,
+    };
+
+    let xy0 = wall.a.coords_2d();
+    let v0 = with_z(xy0, low_z);
+    let xy2 = wall.coord_left();
+    let v2 = with_z(xy2, high_z);
+    let xy3 = wall.coord_right();
+    let v3 = with_z(xy3, high_z);
+
+    let xy4 = space.midpoint(xy0, xy2);
+    println!("{:?}  {:?}  {:?}", xy0, xy4, xy2);
+    let v4 = with_z(xy4, high_z);
+
+    let v0 = space.to_blender(v0);
+    let v2 = space.to_blender(v2);
+    let v3 = space.to_blender(v3);
+    let v4 = space.to_blender(v4);
+
+    if (v0[0] - v4[0]).abs() > 2.0 {
+        panic!("problem {:?}", &wall);
+    }
 }

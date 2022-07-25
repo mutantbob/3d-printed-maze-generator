@@ -1,4 +1,4 @@
-use crate::{BlenderGeometry, HexCellAddress, HexMazeEdge};
+use crate::{BlenderGeometry, CylindricalSpace, HexCellAddress, HexMazeEdge};
 use std::fs::File;
 use std::io::Write;
 
@@ -9,7 +9,16 @@ pub fn check_blender_math(fname: &str) -> Result<(), std::io::Error> {
 
     let edge = HexMazeEdge(HexCellAddress::new(0, 0), HexCellAddress::new(1, 0));
 
-    crate::add_edge_flat(&mut blender, &edge, 1.0);
+    crate::add_edge_flat(
+        &mut blender,
+        &edge,
+        1.0,
+        |xyz| xyz,
+        &CylindricalSpace {
+            r0: 10.0,
+            max_rho: 20.0,
+        },
+    );
 
     blender.emit(&mut f)?;
 

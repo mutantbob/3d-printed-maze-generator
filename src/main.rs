@@ -1,7 +1,7 @@
 use crate::blender_geometry::{BlenderGeometry, Point3D};
 use lazy_static::lazy_static;
 use std::cmp::Ordering;
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::TAU;
 use std::fs::File;
 use std::io::Write;
 
@@ -49,18 +49,27 @@ impl MazeTopology1 {
             .map(|n| self.wrap(n))
             .filter(|n| self.in_bounds(n))
     }
-}
 
-impl MazeTopology1 {
+    pub(crate) fn wall_neighbors<'a>(
+        &'a self,
+        anchor: &HexCellAddress,
+    ) -> impl Iterator<Item = HexCellAddress> + 'a {
+        anchor
+            .neighbors()
+            .into_iter()
+            .map(|n| self.wrap(n))
+            .filter(|n| self.wall_bounds(n))
+    }
+
     pub(crate) fn all_cells<'a>(&'a self) -> impl Iterator<Item = HexCellAddress> + 'a {
         let mut min_v = 0;
         (0..self.after_max_u).flat_map(move |u| {
-            if self.in_bounds(&HexCellAddress::new(u, min_v - 1)) {
+            if self.wall_bounds(&HexCellAddress::new(u, min_v - 1)) {
                 min_v -= 1;
             }
             (min_v..9999)
                 .map(move |v| HexCellAddress::new(u, v))
-                .take_while(|cell| self.in_bounds(cell))
+                .take_while(|cell| self.wall_bounds(cell))
         })
     }
 
@@ -85,6 +94,11 @@ impl MazeTopology1 {
     fn in_bounds(&self, cell: &HexCellAddress) -> bool {
         let (_, y) = cell.coords_2d();
         cell.u >= 0 && cell.u < self.after_max_u && y >= 0. && y < 20.0
+    }
+
+    fn wall_bounds(&self, cell: &HexCellAddress) -> bool {
+        let (_, y) = cell.coords_2d();
+        cell.u >= 0 && cell.u < self.after_max_u && y >= -1. && y < 21.0
     }
 }
 
@@ -113,7 +127,7 @@ fn compute_walls(topology: &MazeTopology1, corridors: &[HexMazeEdge]) -> Vec<Hex
     println!("{} cells", cells.len());
     let mut rval = vec![];
     for cell in cells {
-        let neighbors: Vec<_> = topology.neighbors(&cell).collect();
+        let neighbors: Vec<_> = topology.wall_neighbors(&cell).collect();
         // println!("{:?} has {} neighbors", &cell, neighbors.len());
         let mut directions = vec![];
         let mut is_wall = vec![];
@@ -152,7 +166,6 @@ pub fn write_blender_python(
 ) -> Result<(), std::io::Error> {
     let mut blender = BlenderGeometry::new();
 
-    let mapping = |[x, y, z]: [f32; 3]| [x, y, z + 2.0];
     let cylindrical = CylindricalSpace { r0: 2.0, max_rho };
     for edge in edges {
         add_edge_flat(

@@ -113,7 +113,7 @@ fn compute_walls(topology: &MazeTopology1, corridors: &[HexMazeEdge]) -> Vec<Hex
     let mut rval = vec![];
     for cell in cells {
         let neighbors: Vec<_> = topology.neighbors(&cell).collect();
-        println!("{:?} has {} neighbors", &cell, neighbors.len());
+        // println!("{:?} has {} neighbors", &cell, neighbors.len());
         let mut directions = vec![];
         let mut is_wall = vec![];
         for n in neighbors {
@@ -133,12 +133,9 @@ fn compute_walls(topology: &MazeTopology1, corridors: &[HexMazeEdge]) -> Vec<Hex
         let n = directions.len();
         for (i, wall) in directions.into_iter().enumerate() {
             if let Some(wall) = wall {
-                rval.push(HexMazeWall::new(
-                    wall.0,
-                    wall.1,
-                    is_wall[(i + n - 1) % n],
-                    is_wall[(i + 1) % n],
-                ));
+                let wall_ccw = is_wall[(i + n - 1) % n];
+                let wall_cw = is_wall[(i + 1) % n];
+                rval.push(HexMazeWall::new(wall.0, wall.1, wall_ccw, wall_cw));
             }
         }
     }
@@ -203,31 +200,65 @@ pub fn add_edge_flat(blender: &mut BlenderGeometry, edge: &HexMazeEdge, high_z: 
 pub fn add_wall_flat(blender: &mut BlenderGeometry, wall: &HexMazeWall, high_z: f32) {
     let low_z = 0.0;
 
-    let mid_z = 0.5 * (high_z + low_z);
-
     let xy0 = wall.a.coords_2d();
     let v0 = with_z(xy0, low_z);
+    match (wall.wall_ccw, wall.wall_cw) {
+        (false, false) => {
+            let xy2 = wall.coord_left();
+            let v2 = with_z(xy2, high_z);
+            let xy3 = wall.coord_right();
+            let v3 = with_z(xy3, high_z);
 
-    let xy2 = wall.coord_left();
-    let v2 = with_z(xy2, high_z);
-    let xy3 = wall.coord_right();
-    let v3 = with_z(xy3, high_z);
+            let xy8 = midpoint3(xy0, xy2, xy3);
+            let v8 = with_z(xy8, high_z);
 
-    let v4 = with_z(
-        midpoint(xy0, xy2),
-        if wall.wall_ccw { high_z } else { mid_z },
-    );
-    let v5 = with_z(
-        midpoint(xy0, xy3),
-        if wall.wall_cw { high_z } else { mid_z },
-    );
+            blender.add_face(&[v0, v3, v8]);
+            blender.add_face(&[v3, v2, v8]);
+            blender.add_face(&[v2, v0, v8]);
+        }
+        (true, false) => {
+            let xy2 = wall.coord_left();
+            let v2 = with_z(xy2, high_z);
+            let xy3 = wall.coord_right();
+            let v3 = with_z(xy3, high_z);
 
-    blender.add_face(&[v0, v5, v4]);
-    blender.add_face(&[v4, v5, v3, v2]);
+            let v4 = with_z(midpoint(xy0, xy2), high_z);
+
+            blender.add_face(&[v0, v3, v4]);
+            blender.add_face(&[v4, v3, v2]);
+        }
+        (false, true) => {
+            let xy2 = wall.coord_left();
+            let v2 = with_z(xy2, high_z);
+            let xy3 = wall.coord_right();
+            let v3 = with_z(xy3, high_z);
+
+            let v5 = with_z(midpoint(xy0, xy3), high_z);
+
+            blender.add_face(&[v0, v5, v2]);
+            blender.add_face(&[v5, v3, v2]);
+        }
+        (true, true) => {
+            let xy2 = wall.coord_left();
+            let v2 = with_z(xy2, high_z);
+            let xy3 = wall.coord_right();
+            let v3 = with_z(xy3, high_z);
+
+            let v4 = with_z(midpoint(xy0, xy2), high_z);
+            let v5 = with_z(midpoint(xy0, xy3), high_z);
+
+            blender.add_face(&[v0, v5, v4]);
+            blender.add_face(&[v4, v5, v3, v2]);
+        }
+    }
 }
 
 fn midpoint(p0: (f32, f32), p1: (f32, f32)) -> (f32, f32) {
     ((p0.0 + p1.0) * 0.5, (p0.1 + p1.1) * 0.5)
+}
+
+fn midpoint3(p0: (f32, f32), p1: (f32, f32), p2: (f32, f32)) -> (f32, f32) {
+    ((p0.0 + p1.0 + p2.0) / 3.0, (p0.1 + p1.1 + p2.1) / 3.0)
 }
 
 //

@@ -107,20 +107,38 @@ pub fn draw_maze(fname: &str) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-fn compute_walls(topology: &MazeTopology1, corridors: &[HexMazeEdge]) -> Vec<HexMazeEdge> {
+fn compute_walls(topology: &MazeTopology1, corridors: &[HexMazeEdge]) -> Vec<HexMazeWall> {
     let cells: Vec<_> = topology.all_cells().collect();
     println!("{} cells", cells.len());
     let mut rval = vec![];
     for cell in cells {
         let neighbors: Vec<_> = topology.neighbors(&cell).collect();
         println!("{:?} has {} neighbors", &cell, neighbors.len());
+        let mut directions = vec![];
+        let mut is_wall = vec![];
         for n in neighbors {
-            if cell.cmp(&n) == Ordering::Less {
+            let (edge, wallness) = {
                 let edge = HexMazeEdge(cell, n);
                 if !corridors.iter().any(|old| *old == edge) {
                     //that edge does not have a corridor
-                    rval.push(edge)
+                    (Some(edge), true)
+                } else {
+                    (None, false)
                 }
+            };
+            directions.push(edge);
+            is_wall.push(wallness);
+        }
+
+        let n = directions.len();
+        for (i, wall) in directions.into_iter().enumerate() {
+            if let Some(wall) = wall {
+                rval.push(HexMazeWall::new(
+                    wall.0,
+                    wall.1,
+                    is_wall[(i + n - 1) % n],
+                    is_wall[(i + 1) % n],
+                ));
             }
         }
     }
@@ -131,7 +149,7 @@ fn compute_walls(topology: &MazeTopology1, corridors: &[HexMazeEdge]) -> Vec<Hex
 pub fn write_blender_python(
     fname: &str,
     edges: &[HexMazeEdge],
-    walls: &[HexMazeEdge],
+    walls: &[HexMazeWall],
 ) -> Result<(), std::io::Error> {
     let mut blender = BlenderGeometry::new();
 
@@ -182,15 +200,34 @@ pub fn add_edge_flat(blender: &mut BlenderGeometry, edge: &HexMazeEdge, high_z: 
     blender.add_face(&[v1, v0, v3]);
 }
 
-pub fn add_wall_flat(blender: &mut BlenderGeometry, edge: &HexMazeEdge, high_z: f32) {
-    let v0 = with_z(edge.0.coords_2d(), 0.0);
-    let v1 = with_z(edge.1.coords_2d(), 0.0);
+pub fn add_wall_flat(blender: &mut BlenderGeometry, wall: &HexMazeWall, high_z: f32) {
+    let low_z = 0.0;
 
-    let v2 = with_z(edge.coord_left(), high_z);
-    let v3 = with_z(edge.coord_right(), high_z);
+    let mid_z = 0.5 * (high_z + low_z);
 
-    blender.add_face(&[v0, v3, v2]);
-    blender.add_face(&[v1, v2, v3]);
+    let xy0 = wall.a.coords_2d();
+    let v0 = with_z(xy0, low_z);
+
+    let xy2 = wall.coord_left();
+    let v2 = with_z(xy2, high_z);
+    let xy3 = wall.coord_right();
+    let v3 = with_z(xy3, high_z);
+
+    let v4 = with_z(
+        midpoint(xy0, xy2),
+        if wall.wall_ccw { high_z } else { mid_z },
+    );
+    let v5 = with_z(
+        midpoint(xy0, xy3),
+        if wall.wall_cw { high_z } else { mid_z },
+    );
+
+    blender.add_face(&[v0, v5, v4]);
+    blender.add_face(&[v4, v5, v3, v2]);
+}
+
+fn midpoint(p0: (f32, f32), p1: (f32, f32)) -> (f32, f32) {
+    ((p0.0 + p1.0) * 0.5, (p0.1 + p1.1) * 0.5)
 }
 
 //
@@ -223,9 +260,9 @@ impl HexCellAddress {
     pub fn neighbors(&self) -> [HexCellAddress; 6] {
         [
             HexCellAddress::new(self.u, self.v + 1),
-            HexCellAddress::new(self.u, self.v - 1),
-            HexCellAddress::new(self.u + 1, self.v - 1),
             HexCellAddress::new(self.u + 1, self.v),
+            HexCellAddress::new(self.u + 1, self.v - 1),
+            HexCellAddress::new(self.u, self.v - 1),
             HexCellAddress::new(self.u - 1, self.v),
             HexCellAddress::new(self.u - 1, self.v + 1),
         ]
@@ -297,3 +334,35 @@ impl PartialEq<Self> for HexMazeEdge {
 }
 
 impl Eq for HexMazeEdge {}
+
+//
+
+pub struct HexMazeWall {
+    pub a: HexCellAddress,
+    pub b: HexCellAddress,
+    pub wall_ccw: bool,
+    pub wall_cw: bool,
+}
+
+impl HexMazeWall {
+    pub fn new(a: HexCellAddress, b: HexCellAddress, wall_ccw: bool, wall_cw: bool) -> Self {
+        HexMazeWall {
+            a,
+            b,
+            wall_ccw,
+            wall_cw,
+        }
+    }
+
+    fn edge(&self) -> HexMazeEdge {
+        HexMazeEdge(self.a, self.b)
+    }
+
+    pub(crate) fn coord_left(&self) -> (f32, f32) {
+        self.edge().coord_left()
+    }
+
+    pub(crate) fn coord_right(&self) -> (f32, f32) {
+        self.edge().coord_right()
+    }
+}

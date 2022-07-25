@@ -23,5 +23,8 @@ if obj is None:
 else:
   obj.data = mesh
 
-bpy.context.scene.collection.objects.link(obj)
+try:
+  bpy.context.scene.collection.objects.link(obj)
+except:
+  pass
 

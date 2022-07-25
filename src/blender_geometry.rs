@@ -2,6 +2,7 @@ use std::io::Write;
 
 pub type Point3D = [f32; 3];
 
+#[derive(Default)]
 pub struct BlenderGeometry {
     vertices: Vec<Point3D>,
     faces: Vec<Vec<usize>>,
@@ -32,10 +33,7 @@ impl BlenderGeometry {
 
 impl BlenderGeometry {
     pub fn new() -> Self {
-        BlenderGeometry {
-            vertices: vec![],
-            faces: vec![],
-        }
+        BlenderGeometry::default()
     }
 
     pub fn add_face(&mut self, vertices: &[Point3D]) {
@@ -62,7 +60,7 @@ impl BlenderGeometry {
         self.vertices
             .iter()
             .enumerate()
-            .find(|(idx, old)| **old == *xyz)
+            .find(|(_, old)| **old == *xyz)
             .map(|(idx, _)| idx)
     }
 }

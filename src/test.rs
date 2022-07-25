@@ -1,4 +1,4 @@
-use crate::{HexCellAddress, HexMazeEdge};
+use crate::{HexCellAddress, HexMazeEdge, MazeTopology1};
 use assert_approx_eq::assert_approx_eq;
 
 #[test]
@@ -93,4 +93,13 @@ pub fn test_corners_4() {
         assert_approx_eq!(x0 - 1.0 / 3.0, x);
         assert_approx_eq!(y0 + 1.0 / 3.0_f32.sqrt(), y);
     }
+}
+
+#[test]
+pub fn test_topology_1() {
+    let topology = MazeTopology1 { after_max_u: 20 };
+
+    let ns: Vec<_> = topology.neighbors(HexCellAddress::new(0, 3)).collect();
+
+    assert_eq!(6, ns.len());
 }

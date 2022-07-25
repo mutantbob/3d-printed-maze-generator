@@ -40,12 +40,14 @@ where
                 .into_iter()
                 //.filter(|cell| topology.in_bounds(cell))
                 .collect();
+            // println!("picked {:?}; has {} neighbors", &item, neighbors.len());
             for n in neighbors {
                 if self.visited.contains(&n) {
-                    println!("candidate {:?}", &n);
+                    // println!("candidate {:?}", &n);
                     candidates.push(n);
-                } else if !self.boundary.iter().find(|x| **x == n).is_some() {
-                    println!("boundary {:?}", n.clone());
+                } else if !self.boundary.iter().any(|x| *x == n) {
+                    // is not yet in the boundary
+                    // println!("boundary {:?}", n.clone());
                     self.boundary.push(n);
                 }
             }

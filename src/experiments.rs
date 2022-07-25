@@ -1,4 +1,5 @@
-use crate::{BlenderGeometry, CylindricalSpace, HexCellAddress, HexMazeEdge};
+use crate::tools::{CylindricalSpace, HexCellAddress, HexMazeEdge};
+use crate::BlenderGeometry;
 use std::fs::File;
 use std::io::Write;
 
@@ -45,10 +46,10 @@ pub fn svg_check() -> Result<(), std::io::Error> {
                 let dy = y9 - y;
 
                 let side = 0.05;
-                let x1 = crate::lerp(x, 0.1, x9) + side * dy;
-                let y1 = crate::lerp(y, 0.1, y9) - side * dx;
-                let x8 = crate::lerp(x, 0.9, x9) + side * dy;
-                let y8 = crate::lerp(y, 0.9, y9) - side * dx;
+                let x1 = crate::tools::lerp(x, 0.1, x9) + side * dy;
+                let y1 = crate::tools::lerp(y, 0.1, y9) - side * dx;
+                let x8 = crate::tools::lerp(x, 0.9, x9) + side * dy;
+                let y8 = crate::tools::lerp(y, 0.9, y9) - side * dx;
 
                 writeln!(&mut f, "<path d=\"M {},{} {},{}\" style=\"fill:none; stroke:#00f; stroke-width: 0.1px\"/>",
                          x1, y1, x8, y8)?;

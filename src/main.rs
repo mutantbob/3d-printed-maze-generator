@@ -1,15 +1,21 @@
 use crate::blender_geometry::{BlenderGeometry, Point3D};
+use crate::tools::with_z;
 use lazy_static::lazy_static;
 use std::cmp::Ordering;
-use std::f32::consts::TAU;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
+use tools::{
+    BidirectionalEdge, CylindricalSpace, HexCellAddress, HexMazeEdge, HexMazeWall, MazeTopology1,
+    RingAccumulator, Space,
+};
 
 mod blender_geometry;
 mod experiments;
 mod maze;
 #[cfg(test)]
 mod test;
+mod tools;
 
 lazy_static! {
     static ref TAN_30: f32 = 1.0f32 / 3.0f32.sqrt();
@@ -30,82 +36,12 @@ fn main() {
     }
 }
 
-pub fn with_z(xy: (f32, f32), z: f32) -> Point3D {
-    [xy.0, xy.1, z]
-}
-
-pub struct MazeTopology1 {
-    after_max_u: i32,
-}
-
-impl MazeTopology1 {
-    pub(crate) fn neighbors<'a>(
-        &'a self,
-        anchor: &HexCellAddress,
-    ) -> impl Iterator<Item = HexCellAddress> + 'a {
-        anchor
-            .neighbors()
-            .into_iter()
-            .map(|n| self.wrap(n))
-            .filter(|n| self.in_bounds(n))
-    }
-
-    pub(crate) fn wall_neighbors<'a>(
-        &'a self,
-        anchor: &HexCellAddress,
-    ) -> impl Iterator<Item = HexCellAddress> + 'a {
-        anchor
-            .neighbors()
-            .into_iter()
-            .map(|n| self.wrap(n))
-            .filter(|n| self.wall_bounds(n))
-    }
-
-    #[allow(clippy::needless_lifetimes)] // clippy is wrong.  removing the lifetime triggers an error in my version of rust
-    pub(crate) fn all_cells<'a>(&'a self) -> impl Iterator<Item = HexCellAddress> + 'a {
-        let mut min_v = 0;
-        (0..self.after_max_u).flat_map(move |u| {
-            if self.wall_bounds(&HexCellAddress::new(u, min_v - 1)) {
-                min_v -= 1;
-            }
-            (min_v..9999)
-                .map(move |v| HexCellAddress::new(u, v))
-                .take_while(|cell| self.wall_bounds(cell))
-        })
-    }
-
-    pub(crate) fn wrap(&self, pre: HexCellAddress) -> HexCellAddress {
-        if false {
-            return pre;
-        }
-
-        let mut u = pre.u;
-        let mut v = pre.v;
-        while u < 0 {
-            u += self.after_max_u;
-            v -= self.after_max_u / 2;
-        }
-        while u >= self.after_max_u {
-            u -= self.after_max_u;
-            v += self.after_max_u / 2;
-        }
-        HexCellAddress::new(u, v)
-    }
-
-    fn in_bounds(&self, cell: &HexCellAddress) -> bool {
-        let (_, y) = cell.coords_2d();
-        cell.u >= 0 && cell.u < self.after_max_u && y >= 0. && y < 20.0
-    }
-
-    fn wall_bounds(&self, cell: &HexCellAddress) -> bool {
-        let (_, y) = cell.coords_2d();
-        cell.u >= 0 && cell.u < self.after_max_u && y >= -1. && y < 21.0
-    }
-}
-
 pub fn draw_maze(fname: &str) -> Result<(), std::io::Error> {
     let generator = maze::MazeGenerator::new();
-    let topology1 = MazeTopology1 { after_max_u: 20 };
+    let topology1 = MazeTopology1 {
+        after_max_u: 20,
+        max_y: 8.0,
+    };
     let edges: Vec<_> = generator
         .generate_edges(HexCellAddress::new(0, 0), |cell| topology1.neighbors(cell))
         .into_iter()
@@ -118,7 +54,7 @@ pub fn draw_maze(fname: &str) -> Result<(), std::io::Error> {
 
     println!("{} edges; {} walls", edges.len(), walls.len());
 
-    write_blender_python("/tmp/geom.py", &edges, &walls, topology1.after_max_u as f32)?;
+    write_blender_python("/tmp/geom.py", &edges, &walls, &topology1)?;
 
     Ok(())
 }
@@ -163,8 +99,9 @@ pub fn write_blender_python(
     fname: &str,
     edges: &[HexMazeEdge],
     walls: &[HexMazeWall],
-    max_rho: f32,
+    topology: &MazeTopology1,
 ) -> Result<(), std::io::Error> {
+    let max_rho = topology.after_max_u as f32;
     let mut blender = BlenderGeometry::new();
 
     let cylindrical = CylindricalSpace { r0: 2.0, max_rho };
@@ -181,11 +118,69 @@ pub fn write_blender_python(
         add_wall_flat(&mut blender, wall, 0.3, &cylindrical);
     }
 
+    finish_cylinder(&mut blender, 0.0, topology.max_y);
+
+    println!("epsilon = {:?}", blender.epsilon);
+
     let mut f = File::create(fname)?;
     blender.emit(&mut f)?;
 
     println!("wrote {}", fname);
     Ok(())
+}
+
+fn finish_cylinder(mesh: &mut BlenderGeometry, low_z: f32, high_z: f32) {
+    let mut edge_counts = HashMap::new();
+
+    for face in mesh.face_iter() {
+        for (i, v1) in face.iter().enumerate() {
+            let v2 = face[(i + 1) % face.len()];
+            let edge = BidirectionalEdge::new(*v1, v2);
+            let entry = edge_counts.entry(edge);
+            let count = entry.or_insert(0);
+            *count += 1;
+        }
+    }
+
+    let mut accum = RingAccumulator::default();
+
+    for (edge, count) in edge_counts.into_iter() {
+        match 2.cmp(&count) {
+            Ordering::Less => {
+                panic!("count = {} for {:?}", count, edge);
+            }
+            Ordering::Equal => {}
+            Ordering::Greater => {
+                let &[x1, y1, z1] = mesh.get_vertex(edge.idx1);
+                let &[x2, y2, z2] = mesh.get_vertex(edge.idx2);
+
+                if (x1 - x2).abs().max((y1 - y2).abs()) < 1.0e-6 {
+                    println!("alarmingly vertical edge, this could cause problems")
+                }
+
+                let z0 = if z1 < 0.5 * (low_z + high_z) {
+                    low_z - 2.0
+                } else {
+                    high_z + 2.0
+                };
+
+                let v3 = [x1, y1, z0];
+                let v4 = [x2, y2, z0];
+                accum.absorb(v3, v4);
+                mesh.add_face(&[[x1, y1, z1], v3, v4, [x2, y2, z2]])
+            }
+        }
+    }
+
+    println!(
+        "ring accumulator {} open; {} closed",
+        accum.open_strings.len(),
+        accum.closed_strings.len()
+    );
+
+    for ring in &accum.closed_strings {
+        mesh.add_face(ring);
+    }
 }
 
 pub fn save_edges_svg(fname: &str, edges: &[HexMazeEdge]) -> Result<(), std::io::Error> {
@@ -297,211 +292,5 @@ pub fn add_wall_flat(
             blender.add_face(&[v0, v5, v4]);
             blender.add_face(&[v4, v5, v3, v2]);
         }
-    }
-}
-
-//
-
-//
-
-pub fn lerp(a: f32, t: f32, b: f32) -> f32 {
-    a * (1.0 - t) + b * t
-}
-
-//
-
-#[derive(Eq, Hash, PartialEq, Debug, Copy, Clone)]
-pub struct HexCellAddress {
-    pub u: i32,
-    pub v: i32,
-}
-
-impl HexCellAddress {
-    pub fn new(u: i32, v: i32) -> Self {
-        HexCellAddress { u, v }
-    }
-
-    pub fn coords_2d(&self) -> (f32, f32) {
-        let x = self.u as f32;
-        let y = self.u as f32 * *TAN_30 + self.v as f32 * *SEC_30;
-        (x, y)
-    }
-
-    pub fn neighbors(&self) -> [HexCellAddress; 6] {
-        [
-            HexCellAddress::new(self.u, self.v + 1),
-            HexCellAddress::new(self.u + 1, self.v),
-            HexCellAddress::new(self.u + 1, self.v - 1),
-            HexCellAddress::new(self.u, self.v - 1),
-            HexCellAddress::new(self.u - 1, self.v),
-            HexCellAddress::new(self.u - 1, self.v + 1),
-        ]
-    }
-}
-
-impl PartialOrd<Self> for HexCellAddress {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for HexCellAddress {
-    fn cmp(&self, other: &Self) -> Ordering {
-        if self.u < other.u {
-            Ordering::Less
-        } else if self.u > other.u {
-            Ordering::Greater
-        } else if self.v < other.v {
-            Ordering::Less
-        } else if self.v > other.v {
-            Ordering::Greater
-        } else {
-            Ordering::Equal
-        }
-    }
-}
-
-//
-
-pub struct HexMazeEdge(HexCellAddress, HexCellAddress);
-
-impl HexMazeEdge {
-    pub fn coord_left(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32) {
-        let v1 = self.0.coords_2d();
-        let v2 = self.1.coords_2d();
-        let frac = 0.5 * 0.5 / 0.75_f32.sqrt();
-
-        let (dx, dy) = space.subtract(v2, v1);
-
-        let x3 = v1.0 + dx * 0.5 - dy * frac;
-        let y3 = v1.1 + dy * 0.5 + dx * frac;
-        (x3, y3)
-    }
-
-    pub fn coord_right(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32) {
-        let v1 = self.0.coords_2d();
-        let v2 = self.1.coords_2d();
-        let frac = 0.5 * 0.5 / 0.75_f32.sqrt();
-
-        let (dx, dy) = space.subtract(v2, v1);
-        let x3 = v1.0 + dx * 0.5 + dy * frac;
-        let y3 = v1.1 + dy * 0.5 - dx * frac;
-        (x3, y3)
-    }
-}
-
-impl PartialEq<Self> for HexMazeEdge {
-    fn eq(&self, other: &Self) -> bool {
-        if self.0 == other.0 {
-            self.1 == other.1
-        } else if self.0 == other.1 {
-            self.1 == other.0
-        } else {
-            false
-        }
-    }
-}
-
-impl Eq for HexMazeEdge {}
-
-//
-
-#[derive(Debug)]
-pub struct HexMazeWall {
-    pub a: HexCellAddress,
-    pub b: HexCellAddress,
-    pub wall_ccw: bool,
-    pub wall_cw: bool,
-}
-
-impl HexMazeWall {
-    pub fn new(a: HexCellAddress, b: HexCellAddress, wall_ccw: bool, wall_cw: bool) -> Self {
-        HexMazeWall {
-            a,
-            b,
-            wall_ccw,
-            wall_cw,
-        }
-    }
-
-    fn edge(&self) -> HexMazeEdge {
-        HexMazeEdge(self.a, self.b)
-    }
-
-    pub(crate) fn coord_left(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32) {
-        self.edge().coord_left(space)
-    }
-
-    pub(crate) fn coord_right(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32) {
-        self.edge().coord_right(space)
-    }
-}
-
-//
-
-pub trait Space<C> {
-    fn midpoint(&self, a: C, b: C) -> C;
-    fn midpoint3(&self, a: C, b: C, c: C) -> C;
-    // fn to_blender(&self, p: C) -> Point3D;
-
-    fn subtract(&self, p1: C, p2: C) -> C;
-}
-
-pub struct CylindricalSpace {
-    pub r0: f32,
-    pub max_rho: f32,
-}
-
-impl Space<(f32, f32)> for CylindricalSpace {
-    fn midpoint(&self, (rho1, z1): (f32, f32), (mut rho2, z2): (f32, f32)) -> (f32, f32) {
-        let old = rho2;
-        self.harmonize_angle(rho1, &mut rho2);
-        if old != rho2 {
-            println!("harmonized {} to {}", old, rho2);
-        }
-
-        (0.5 * (rho1 + rho2), 0.5 * (z1 + z2))
-    }
-
-    fn midpoint3(
-        &self,
-        (rho1, z1): (f32, f32),
-        (mut rho2, z2): (f32, f32),
-        (mut rho3, z3): (f32, f32),
-    ) -> (f32, f32) {
-        self.harmonize_angle(rho1, &mut rho2);
-        self.harmonize_angle(rho1, &mut rho3);
-        ((rho1 + rho2 + rho3) / 3.0, (z1 + z2 + z3) / 3.0)
-    }
-
-    fn subtract(&self, p1: (f32, f32), p2: (f32, f32)) -> (f32, f32) {
-        let rho1 = p1.0;
-        let mut rho2 = p2.0;
-        self.harmonize_angle(rho1, &mut rho2);
-
-        (rho1 - rho2, p1.1 - p2.1)
-    }
-}
-
-impl CylindricalSpace {
-    fn harmonize_angle(&self, rho1: f32, rho2: &mut f32) {
-        let theta1 = rho1 / self.max_rho;
-        let theta2 = *rho2 / self.max_rho;
-        if theta1 - theta2 > 0.5 {
-            *rho2 += self.max_rho;
-        } else if theta2 - theta1 > 0.5 {
-            *rho2 -= self.max_rho;
-        }
-    }
-
-    fn to_blender(&self, [rho1, z, r]: Point3D) -> Point3D {
-        let r0 = self.r0;
-        let max_rho = self.max_rho;
-
-        let theta = rho1 / max_rho * TAU;
-        let x = theta.cos() * (r + r0);
-        let y = theta.sin() * (r + r0);
-
-        [x, y, z]
     }
 }

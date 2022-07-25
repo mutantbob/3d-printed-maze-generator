@@ -1,13 +1,17 @@
-use crate::HexCellAddress;
 use rand::Rng;
-use std::collections::HashMap;
+use std::collections::HashSet;
+use std::fmt::Debug;
+use std::hash::Hash;
 
-pub struct MazeGenerator {
-    visited: HashMap<HexCellAddress, bool>,
-    boundary: Vec<HexCellAddress>,
+pub struct MazeGenerator<T> {
+    visited: HashSet<T>,
+    boundary: Vec<T>,
 }
 
-impl MazeGenerator {
+impl<T> MazeGenerator<T>
+where
+    T: Eq + Hash + Debug + Clone,
+{
     pub fn new() -> Self {
         MazeGenerator {
             visited: Default::default(),
@@ -15,10 +19,11 @@ impl MazeGenerator {
         }
     }
 
-    pub fn generate_edges(
-        mut self,
-        start: HexCellAddress,
-    ) -> Vec<(HexCellAddress, HexCellAddress)> {
+    pub fn generate_edges<FN, I>(mut self, start: T, neighbors: FN) -> Vec<(T, T)>
+    where
+        FN: Fn(&T) -> I,
+        I: IntoIterator<Item = T>,
+    {
         self.boundary.push(start);
 
         let mut rng = rand::thread_rng();
@@ -31,34 +36,28 @@ impl MazeGenerator {
             let idx = rng.gen_range(0..self.boundary.len());
             let item = self.boundary.remove(idx);
             let mut candidates = vec![];
-            let neighbors: Vec<_> = item
-                .neighbors()
+            let neighbors: Vec<_> = neighbors(&item)
                 .into_iter()
-                .filter(|cell| self.in_bounds(cell))
+                //.filter(|cell| topology.in_bounds(cell))
                 .collect();
             for n in neighbors {
-                if self.visited.contains_key(&n) {
-                    println!("candidate {:?}", n);
+                if self.visited.contains(&n) {
+                    println!("candidate {:?}", &n);
                     candidates.push(n);
                 } else if !self.boundary.iter().find(|x| **x == n).is_some() {
-                    println!("boundary {:?}", n);
+                    println!("boundary {:?}", n.clone());
                     self.boundary.push(n);
                 }
             }
 
             if !candidates.is_empty() {
                 let old = candidates.remove(rng.gen_range(0..candidates.len()));
-                let edge = (old, item);
+                let edge = (old, item.clone());
                 rval.push(edge);
             }
-            self.visited.insert(item, true);
+            self.visited.insert(item);
         }
 
         rval
-    }
-
-    pub fn in_bounds(&self, cell: &HexCellAddress) -> bool {
-        let (x, y) = cell.coords_2d();
-        x >= 0. && x < 10.0 && y >= 0. && y < 20.0
     }
 }

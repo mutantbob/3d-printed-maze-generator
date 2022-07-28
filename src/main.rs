@@ -38,15 +38,17 @@ fn main() {
 
 pub fn draw_maze(fname: &str) -> Result<(), std::io::Error> {
     let generator = maze::MazeGenerator::new();
-    let topology1 = MazeTopology1 {
-        after_max_u: 20,
-        max_y: 8.0,
-    };
-    let edges: Vec<_> = generator
+    let topology1 = MazeTopology1::new(20, 3);
+    let mut edges: Vec<_> = generator
         .generate_edges(HexCellAddress::new(0, 0), |cell| topology1.neighbors(cell))
         .into_iter()
         .map(|(c1, c2)| HexMazeEdge(c1, c2))
         .collect();
+
+    edges.push(HexMazeEdge(
+        HexCellAddress::new(0, 0),
+        HexCellAddress::new(0, -1),
+    ));
 
     save_edges_svg(fname, &edges)?;
 
@@ -81,13 +83,16 @@ fn compute_walls(topology: &MazeTopology1, corridors: &[HexMazeEdge]) -> Vec<Hex
             directions.push(edge);
             is_wall.push(wallness);
         }
+        let wall_all = !is_wall.iter().any(|b| !*b);
 
         let n = directions.len();
         for (i, wall) in directions.into_iter().enumerate() {
             if let Some(wall) = wall {
                 let wall_ccw = is_wall[(i + n - 1) % n];
                 let wall_cw = is_wall[(i + 1) % n];
-                rval.push(HexMazeWall::new(wall.0, wall.1, wall_ccw, wall_cw));
+                rval.push(HexMazeWall::new(
+                    wall.0, wall.1, wall_ccw, wall_cw, wall_all,
+                ));
             }
         }
     }
@@ -104,21 +109,28 @@ pub fn write_blender_python(
     let max_rho = topology.after_max_u as f32;
     let mut blender = BlenderGeometry::new();
 
-    let cylindrical = CylindricalSpace { r0: 2.0, max_rho };
+    let cylindrical = CylindricalSpace { r0: 8.8, max_rho };
+    let high_z = 1.2;
     for edge in edges {
         add_edge_flat(
             &mut blender,
             edge,
-            0.3,
+            high_z,
             |xyz| cylindrical.to_blender(xyz),
             &cylindrical,
         );
     }
     for wall in walls {
-        add_wall_flat(&mut blender, wall, 0.3, &cylindrical);
+        add_wall(&mut blender, wall, high_z, &cylindrical);
     }
 
-    finish_cylinder(&mut blender, 0.0, topology.max_y);
+    if true {
+        finish_cylinder(
+            &mut blender,
+            cylindrical.scale_z(-2.0),
+            cylindrical.scale_z(topology.max_y + 2.0),
+        );
+    }
 
     println!("epsilon = {:?}", blender.epsilon);
 
@@ -159,9 +171,9 @@ fn finish_cylinder(mesh: &mut BlenderGeometry, low_z: f32, high_z: f32) {
                 }
 
                 let z0 = if z1 < 0.5 * (low_z + high_z) {
-                    low_z - 2.0
+                    low_z
                 } else {
-                    high_z + 2.0
+                    high_z
                 };
 
                 let v3 = [x1, y1, z0];
@@ -224,7 +236,7 @@ pub fn add_edge_flat<F>(
     blender.add_face(&[v1, v0, v3]);
 }
 
-pub fn add_wall_flat(
+pub fn add_wall(
     blender: &mut BlenderGeometry,
     wall: &HexMazeWall,
     high_z: f32,
@@ -239,58 +251,68 @@ pub fn add_wall_flat(
     let xy3 = wall.coord_right(space);
     let v3 = with_z(xy3, high_z);
 
-    match (wall.wall_ccw, wall.wall_cw) {
-        (false, false) => {
-            let xy8 = space.midpoint3(xy0, xy2, xy3);
-            let v8 = with_z(xy8, high_z);
+    if wall.wall_all {
+        let v0 = with_z(xy0, high_z);
 
-            let v0 = space.to_blender(v0);
-            let v2 = space.to_blender(v2);
-            let v3 = space.to_blender(v3);
-            let v8 = space.to_blender(v8);
+        let v0 = space.to_blender(v0);
+        let v2 = space.to_blender(v2);
+        let v3 = space.to_blender(v3);
 
-            blender.add_face(&[v0, v3, v8]);
-            blender.add_face(&[v3, v2, v8]);
-            blender.add_face(&[v2, v0, v8]);
-        }
-        (true, false) => {
-            let v4 = with_z(space.midpoint(xy0, xy2), high_z);
+        blender.add_face(&[v0, v3, v2]);
+    } else {
+        match (wall.wall_ccw, wall.wall_cw) {
+            (false, false) => {
+                let xy8 = space.midpoint3(xy0, xy2, xy3);
+                let v8 = with_z(xy8, high_z);
 
-            let v0 = space.to_blender(v0);
-            let v2 = space.to_blender(v2);
-            let v3 = space.to_blender(v3);
-            let v4 = space.to_blender(v4);
+                let v0 = space.to_blender(v0);
+                let v2 = space.to_blender(v2);
+                let v3 = space.to_blender(v3);
+                let v8 = space.to_blender(v8);
 
-            if (v0[0] - v4[0]).abs() > 2.0 {
-                println!("problem {:?}", &wall);
+                blender.add_face(&[v0, v3, v8]);
+                blender.add_face(&[v3, v2, v8]);
+                blender.add_face(&[v2, v0, v8]);
             }
+            (true, false) => {
+                let v4 = with_z(space.midpoint(xy0, xy2), high_z);
 
-            blender.add_face(&[v0, v3, v4]);
-            blender.add_face(&[v4, v3, v2]);
-        }
-        (false, true) => {
-            let v5 = with_z(space.midpoint(xy0, xy3), high_z);
+                let v0 = space.to_blender(v0);
+                let v2 = space.to_blender(v2);
+                let v3 = space.to_blender(v3);
+                let v4 = space.to_blender(v4);
 
-            let v0 = space.to_blender(v0);
-            let v2 = space.to_blender(v2);
-            let v3 = space.to_blender(v3);
-            let v5 = space.to_blender(v5);
+                if (v0[0] - v4[0]).abs() > 2.0 {
+                    println!("problem {:?}", &wall);
+                }
 
-            blender.add_face(&[v0, v5, v2]);
-            blender.add_face(&[v5, v3, v2]);
-        }
-        (true, true) => {
-            let v4 = with_z(space.midpoint(xy0, xy2), high_z);
-            let v5 = with_z(space.midpoint(xy0, xy3), high_z);
+                blender.add_face(&[v0, v3, v4]);
+                blender.add_face(&[v4, v3, v2]);
+            }
+            (false, true) => {
+                let v5 = with_z(space.midpoint(xy0, xy3), high_z);
 
-            let v0 = space.to_blender(v0);
-            let v2 = space.to_blender(v2);
-            let v3 = space.to_blender(v3);
-            let v4 = space.to_blender(v4);
-            let v5 = space.to_blender(v5);
+                let v0 = space.to_blender(v0);
+                let v2 = space.to_blender(v2);
+                let v3 = space.to_blender(v3);
+                let v5 = space.to_blender(v5);
 
-            blender.add_face(&[v0, v5, v4]);
-            blender.add_face(&[v4, v5, v3, v2]);
+                blender.add_face(&[v0, v5, v2]);
+                blender.add_face(&[v5, v3, v2]);
+            }
+            (true, true) => {
+                let v4 = with_z(space.midpoint(xy0, xy2), high_z);
+                let v5 = with_z(space.midpoint(xy0, xy3), high_z);
+
+                let v0 = space.to_blender(v0);
+                let v2 = space.to_blender(v2);
+                let v3 = space.to_blender(v3);
+                let v4 = space.to_blender(v4);
+                let v5 = space.to_blender(v5);
+
+                blender.add_face(&[v0, v5, v4]);
+                blender.add_face(&[v4, v5, v3, v2]);
+            }
         }
     }
 }

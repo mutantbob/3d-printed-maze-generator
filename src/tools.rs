@@ -1,6 +1,6 @@
 use crate::{Point3D, SEC_30, TAN_30};
 use std::cmp::Ordering;
-use std::f32::consts::TAU;
+use std::f32::consts::{PI, TAU};
 
 pub fn with_z(xy: (f32, f32), z: f32) -> Point3D {
     [xy.0, xy.1, z]
@@ -12,6 +12,13 @@ pub struct MazeTopology1 {
 }
 
 impl MazeTopology1 {
+    pub fn new(u_count: u32, v_count: u32) -> Self {
+        MazeTopology1 {
+            after_max_u: u_count as i32,
+            max_y: 0.1 + (v_count as f32) * *SEC_30,
+        }
+    }
+
     pub(crate) fn neighbors<'a>(
         &'a self,
         anchor: &HexCellAddress,
@@ -72,7 +79,10 @@ impl MazeTopology1 {
 
     fn wall_bounds(&self, cell: &HexCellAddress) -> bool {
         let (_, y) = cell.coords_2d();
-        cell.u >= 0 && cell.u < self.after_max_u && y >= -*SEC_30 && y < self.max_y + 1.0
+        cell.u >= 0
+            && cell.u < self.after_max_u
+            && y >= -0.1 - *SEC_30
+            && y < self.max_y + *SEC_30 + 0.1
     }
 }
 
@@ -178,15 +188,23 @@ pub struct HexMazeWall {
     pub b: HexCellAddress,
     pub wall_ccw: bool,
     pub wall_cw: bool,
+    pub wall_all: bool,
 }
 
 impl HexMazeWall {
-    pub fn new(a: HexCellAddress, b: HexCellAddress, wall_ccw: bool, wall_cw: bool) -> Self {
+    pub fn new(
+        a: HexCellAddress,
+        b: HexCellAddress,
+        wall_ccw: bool,
+        wall_cw: bool,
+        wall_all: bool,
+    ) -> Self {
         HexMazeWall {
             a,
             b,
             wall_ccw,
             wall_cw,
+            wall_all,
         }
     }
 
@@ -258,6 +276,10 @@ impl CylindricalSpace {
         }
     }
 
+    pub fn scale_z(&self, z: f32) -> f32 {
+        z * 2.0 * PI * self.r0 / self.max_rho
+    }
+
     pub fn to_blender(&self, [rho1, z, r]: Point3D) -> Point3D {
         let r0 = self.r0;
         let max_rho = self.max_rho;
@@ -265,6 +287,8 @@ impl CylindricalSpace {
         let theta = rho1 / max_rho * TAU;
         let x = theta.cos() * (r + r0);
         let y = theta.sin() * (r + r0);
+
+        let z = self.scale_z(z);
 
         [x, y, z]
     }

@@ -202,66 +202,12 @@ fn finish_cylinder(mesh: &mut BlenderGeometry, low_z: f32, high_z: f32) {
     );
 
     if accum.closed_strings.len() > 2 {
-        debug_too_many_rings(&accum, mesh);
+        panic!("how did this happen?");
     }
 
     for ring in &accum.closed_strings {
         mesh.add_face(ring);
     }
-}
-
-fn debug_too_many_rings(rings: &RingAccumulator, mesh: &BlenderGeometry) {
-    let string = rings
-        .closed_strings
-        .iter()
-        .fold(None, |accum, ring| match accum {
-            None => Some(ring),
-            Some(old) => {
-                if old.len() < ring.len() {
-                    Some(old)
-                } else {
-                    Some(ring)
-                }
-            }
-        })
-        .unwrap();
-
-    println!("bad ring {}", string.len());
-    for xyz1 in string {
-        for (i, xyz2, dist) in mesh
-            .get_vertices()
-            .iter()
-            .enumerate()
-            .filter_map(|(i, xyz2)| {
-                let dist = L2_dist(xyz1, xyz2);
-                if dist < 1.0 {
-                    Some((i, xyz2, dist))
-                } else {
-                    None
-                }
-            })
-        {
-            println!("{} = {:?} - {:?} @{}", dist, xyz1, xyz2, i);
-        }
-    }
-
-    let orange = [-5.000000476837158, 8.660253524780273, 39.3853645324707];
-
-    for xyz in mesh.get_vertices() {
-        let dist = L2_dist(xyz, &orange);
-        if dist < 0.1 {
-            println!("_ {} = {:?} - {:?}", dist, xyz, &orange);
-        }
-    }
-}
-
-fn L2_dist(p2: &Point3D, p1: &Point3D) -> f32 {
-    p1.iter()
-        .zip(p2.iter())
-        .map(|(a, b)| a - b)
-        .map(|d| d * d)
-        .sum::<f32>()
-        .sqrt()
 }
 
 pub fn save_edges_svg(fname: &str, edges: &[HexMazeEdge]) -> Result<(), std::io::Error> {

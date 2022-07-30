@@ -2,8 +2,18 @@ use crate::{Point3D, SEC_30, TAN_30};
 use std::cmp::Ordering;
 use std::f32::consts::{PI, TAU};
 
-pub fn with_z(xy: (f32, f32), z: f32) -> Point3D {
-    [xy.0, xy.1, z]
+pub fn with_r(xz: (f32, f32), r: f32) -> CylindricalCoodinate {
+    CylindricalCoodinate {
+        rho: xz.0,
+        z: xz.1,
+        r,
+    }
+}
+
+pub struct CylindricalCoodinate {
+    pub rho: f32,
+    pub r: f32,
+    pub z: f32,
 }
 
 pub struct MazeTopology1 {
@@ -280,15 +290,15 @@ impl CylindricalSpace {
         z * 2.0 * PI * self.r0 / self.max_rho
     }
 
-    pub fn to_blender(&self, [rho1, z, r]: Point3D) -> Point3D {
+    pub fn to_blender(&self, cc: CylindricalCoodinate) -> Point3D {
         let r0 = self.r0;
         let max_rho = self.max_rho;
 
-        let theta = rho1 / max_rho * TAU;
-        let x = theta.cos() * (r + r0);
-        let y = theta.sin() * (r + r0);
+        let theta = cc.rho / max_rho * TAU;
+        let x = theta.cos() * (cc.r + r0);
+        let y = theta.sin() * (cc.r + r0);
 
-        let z = self.scale_z(z);
+        let z = self.scale_z(cc.z);
 
         [x, y, z]
     }

@@ -14,7 +14,7 @@ pub fn check_blender_math(fname: &str) -> Result<(), std::io::Error> {
         &mut blender,
         &edge,
         1.0,
-        |xyz| xyz,
+        |cc| [cc.rho, cc.z, cc.r],
         &CylindricalSpace {
             r0: 10.0,
             max_rho: 20.0,

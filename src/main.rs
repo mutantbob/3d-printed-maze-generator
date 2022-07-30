@@ -1,5 +1,5 @@
 use crate::blender_geometry::{BlenderGeometry, Point3D};
-use crate::tools::with_z;
+use crate::tools::{with_r, CylindricalCoodinate};
 use lazy_static::lazy_static;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -117,22 +117,22 @@ pub fn write_blender_python(
     let max_rho = topology.after_max_u as f32;
     let mut blender = BlenderGeometry::new();
 
-    let high_z = 2.0;
+    let groove_depth = 2.0;
     let cylindrical = CylindricalSpace {
-        r0: 10.0 - high_z,
+        r0: 10.0 - groove_depth,
         max_rho,
     };
     for edge in edges {
         add_edge_flat(
             &mut blender,
             edge,
-            high_z,
+            groove_depth,
             |xyz| cylindrical.to_blender(xyz),
             &cylindrical,
         );
     }
     for wall in walls {
-        add_wall(&mut blender, wall, high_z, &cylindrical);
+        add_wall(&mut blender, wall, groove_depth, &cylindrical);
     }
 
     if true {
@@ -152,7 +152,7 @@ pub fn write_blender_python(
     Ok(())
 }
 
-fn finish_cylinder(mesh: &mut BlenderGeometry, low_z: f32, high_z: f32) {
+fn finish_cylinder(mesh: &mut BlenderGeometry, groove_r: f32, cylinder_r: f32) {
     let mut edge_counts = HashMap::new();
 
     for face in mesh.face_iter() {
@@ -181,10 +181,10 @@ fn finish_cylinder(mesh: &mut BlenderGeometry, low_z: f32, high_z: f32) {
                     println!("alarmingly vertical edge, this could cause problems")
                 }
 
-                let z0 = if z1 < 0.5 * (low_z + high_z) {
-                    low_z
+                let z0 = if z1 < 0.5 * (groove_r + cylinder_r) {
+                    groove_r
                 } else {
-                    high_z
+                    cylinder_r
                 };
 
                 let v3 = [x1, y1, z0];
@@ -235,17 +235,17 @@ pub fn save_edges_svg(fname: &str, edges: &[HexMazeEdge]) -> Result<(), std::io:
 pub fn add_edge_flat<F>(
     blender: &mut BlenderGeometry,
     edge: &HexMazeEdge,
-    high_z: f32,
+    delta_r: f32,
     mapping: F,
     space: &dyn Space<(f32, f32)>,
 ) where
-    F: Fn(Point3D) -> Point3D,
+    F: Fn(CylindricalCoodinate) -> Point3D,
 {
-    let v0 = mapping(with_z(edge.0.coords_2d(), 0.0));
-    let v1 = mapping(with_z(edge.1.coords_2d(), 0.0));
+    let v0 = mapping(with_r(edge.0.coords_2d(), 0.0));
+    let v1 = mapping(with_r(edge.1.coords_2d(), 0.0));
 
-    let v2 = mapping(with_z(edge.coord_left(space), high_z));
-    let v3 = mapping(with_z(edge.coord_right(space), high_z));
+    let v2 = mapping(with_r(edge.coord_left(space), delta_r));
+    let v3 = mapping(with_r(edge.coord_right(space), delta_r));
 
     blender.add_face(&[v0, v1, v2]);
     blender.add_face(&[v1, v0, v3]);
@@ -254,20 +254,20 @@ pub fn add_edge_flat<F>(
 pub fn add_wall(
     blender: &mut BlenderGeometry,
     wall: &HexMazeWall,
-    high_z: f32,
+    delta_r: f32,
     space: &CylindricalSpace,
 ) {
     let low_z = 0.0;
 
     let xy0 = wall.a.coords_2d();
-    let v0 = with_z(xy0, low_z);
+    let v0 = with_r(xy0, low_z);
     let xy2 = wall.coord_left(space);
-    let v2 = with_z(xy2, high_z);
+    let v2 = with_r(xy2, delta_r);
     let xy3 = wall.coord_right(space);
-    let v3 = with_z(xy3, high_z);
+    let v3 = with_r(xy3, delta_r);
 
     if wall.wall_all {
-        let v0 = with_z(xy0, high_z);
+        let v0 = with_r(xy0, delta_r);
 
         let v0 = space.to_blender(v0);
         let v2 = space.to_blender(v2);
@@ -278,7 +278,7 @@ pub fn add_wall(
         match (wall.wall_ccw, wall.wall_cw) {
             (false, false) => {
                 let xy8 = space.midpoint3(xy0, xy2, xy3);
-                let v8 = with_z(xy8, high_z);
+                let v8 = with_r(xy8, delta_r);
 
                 let v0 = space.to_blender(v0);
                 let v2 = space.to_blender(v2);
@@ -290,7 +290,7 @@ pub fn add_wall(
                 blender.add_face(&[v2, v0, v8]);
             }
             (true, false) => {
-                let v4 = with_z(space.midpoint(xy0, xy2), high_z);
+                let v4 = with_r(space.midpoint(xy0, xy2), delta_r);
 
                 let v0 = space.to_blender(v0);
                 let v2 = space.to_blender(v2);
@@ -305,7 +305,7 @@ pub fn add_wall(
                 blender.add_face(&[v4, v3, v2]);
             }
             (false, true) => {
-                let v5 = with_z(space.midpoint(xy0, xy3), high_z);
+                let v5 = with_r(space.midpoint(xy0, xy3), delta_r);
 
                 let v0 = space.to_blender(v0);
                 let v2 = space.to_blender(v2);
@@ -316,8 +316,8 @@ pub fn add_wall(
                 blender.add_face(&[v5, v3, v2]);
             }
             (true, true) => {
-                let v4 = with_z(space.midpoint(xy0, xy2), high_z);
-                let v5 = with_z(space.midpoint(xy0, xy3), high_z);
+                let v4 = with_r(space.midpoint(xy0, xy2), delta_r);
+                let v5 = with_r(space.midpoint(xy0, xy3), delta_r);
 
                 let v0 = space.to_blender(v0);
                 let v2 = space.to_blender(v2);

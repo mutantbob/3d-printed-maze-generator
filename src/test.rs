@@ -1,5 +1,5 @@
 use crate::tools::{
-    with_z, CylindricalSpace, HexCellAddress, HexMazeEdge, HexMazeWall, MazeTopology1,
+    with_r, CylindricalSpace, HexCellAddress, HexMazeEdge, HexMazeWall, MazeTopology1,
     RingAccumulator, Space,
 };
 use assert_approx_eq::assert_approx_eq;
@@ -137,7 +137,7 @@ pub fn test_wall() {
     );
 
     let xy0 = wall.a.coords_2d();
-    let v0 = with_z(xy0, low_z);
+    let v0 = with_r(xy0, low_z);
     let xy2 = wall.coord_left(&space);
     // let v2 = with_z(xy2, high_z);
     // let xy3 = wall.coord_right(&space);
@@ -145,7 +145,7 @@ pub fn test_wall() {
 
     let xy4 = space.midpoint(xy0, xy2);
     println!("{:?}  {:?}  {:?}", xy0, xy4, xy2);
-    let v4 = with_z(xy4, high_z);
+    let v4 = with_r(xy4, high_z);
 
     let v0 = space.to_blender(v0);
     // let v2 = space.to_blender(v2);

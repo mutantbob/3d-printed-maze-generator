@@ -1,4 +1,5 @@
-use rand::Rng;
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha8Rng;
 use std::cmp::Ordering;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
@@ -37,7 +38,8 @@ where
     {
         self.boundary.push(start.clone());
 
-        let mut rng = rand::thread_rng();
+        // let mut rng = rand::thread_rng();
+        let mut rng = ChaCha8Rng::from_seed([7; 32]);
 
         let mut rval = vec![];
         loop {
@@ -96,7 +98,9 @@ where
         boundary.insert(start, 0);
         while !boundary.is_empty() {
             let candidates = Self::pick_low_cost(&boundary);
-            let chosen = &candidates[rng.gen_range(0..candidates.len())];
+            let chosen = &candidates[
+                0//rng.gen_range(0..candidates.len())
+                ];
             let distance = boundary.remove(chosen).unwrap();
             distances.insert(chosen.clone(), distance);
             for n in Self::connected(chosen, edges) {

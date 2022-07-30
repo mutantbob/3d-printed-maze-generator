@@ -38,7 +38,7 @@ fn main() {
 
 pub fn draw_maze(fname: &str) -> Result<(), std::io::Error> {
     let generator = maze::MazeGenerator::new();
-    let topology1 = MazeTopology1::new(20, 3);
+    let topology1 = MazeTopology1::new(14, 12);
     let mut edges: Vec<_> = generator
         .generate_edges(
             HexCellAddress::new(0, 0),
@@ -117,8 +117,11 @@ pub fn write_blender_python(
     let max_rho = topology.after_max_u as f32;
     let mut blender = BlenderGeometry::new();
 
-    let cylindrical = CylindricalSpace { r0: 8.8, max_rho };
-    let high_z = 1.2;
+    let high_z = 2.0;
+    let cylindrical = CylindricalSpace {
+        r0: 10.0 - high_z,
+        max_rho,
+    };
     for edge in edges {
         add_edge_flat(
             &mut blender,
@@ -135,7 +138,7 @@ pub fn write_blender_python(
     if true {
         finish_cylinder(
             &mut blender,
-            cylindrical.scale_z(-2.0),
+            cylindrical.scale_z(-3.0),
             cylindrical.scale_z(topology.max_y + 2.5),
         );
     }
@@ -198,9 +201,58 @@ fn finish_cylinder(mesh: &mut BlenderGeometry, low_z: f32, high_z: f32) {
         accum.closed_strings.len()
     );
 
+    if accum.closed_strings.len() > 2 {
+        debug_too_many_rings(&accum, mesh);
+    }
+
     for ring in &accum.closed_strings {
         mesh.add_face(ring);
     }
+}
+
+fn debug_too_many_rings(rings: &RingAccumulator, mesh: &BlenderGeometry) {
+    let string = rings
+        .closed_strings
+        .iter()
+        .fold(None, |accum, ring| match accum {
+            None => Some(ring),
+            Some(old) => {
+                if old.len() < ring.len() {
+                    Some(old)
+                } else {
+                    Some(ring)
+                }
+            }
+        })
+        .unwrap();
+
+    println!("bad ring {}", string.len());
+    for xyz1 in string {
+        for (i, xyz2, dist) in mesh
+            .get_vertices()
+            .iter()
+            .enumerate()
+            .filter_map(|(i, xyz2)| {
+                let dist = L2_dist(xyz1, xyz2);
+                if dist < 1.0 {
+                    Some((i, xyz2, dist))
+                } else {
+                    None
+                }
+            })
+        {
+            println!("{} = {:?} - {:?} @{}", dist, xyz1, xyz2, i);
+        }
+    }
+}
+
+fn L2_dist(p2: &Point3D, p1: &Point3D) -> f32 {
+    p1.iter()
+        .zip(p2.iter())
+        .map(|(a, b)| a - b)
+        .map(|d| d * d)
+        .sum::<f32>()
+        .sqrt()
 }
 
 pub fn save_edges_svg(fname: &str, edges: &[HexMazeEdge]) -> Result<(), std::io::Error> {
@@ -290,9 +342,9 @@ pub fn add_wall(
                 let v3 = space.to_blender(v3);
                 let v4 = space.to_blender(v4);
 
-                if (v0[0] - v4[0]).abs() > 2.0 {
+                /*if (v0[0] - v4[0]).abs() > 2.0 {
                     println!("problem {:?}", &wall);
-                }
+                }*/
 
                 blender.add_face(&[v0, v3, v4]);
                 blender.add_face(&[v4, v3, v2]);

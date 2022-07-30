@@ -21,6 +21,7 @@ dependencies = [
  "assert_approx_eq",
  "lazy_static",
  "rand",
+ "rand_chacha",
 ]
 
 [[package]]

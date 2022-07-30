@@ -90,4 +90,8 @@ impl BlenderGeometry {
         }
         false
     }
+
+    pub fn get_vertices(&self) -> &[Point3D] {
+        return &self.vertices;
+    }
 }

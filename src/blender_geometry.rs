@@ -9,6 +9,8 @@ pub struct BlenderGeometry {
     pub epsilon: Option<f32>,
 }
 
+const MAX_EPSILON: f32 = 5.0e-5;
+
 impl BlenderGeometry {
     pub fn new() -> Self {
         BlenderGeometry::default()
@@ -77,7 +79,7 @@ impl BlenderGeometry {
         let dy = (p0[1] - p1[1]).abs();
         let dz = (p0[2] - p1[2]).abs();
         let delta = dx.max(dy).max(dz);
-        if delta <= 1.0e-5 {
+        if delta <= MAX_EPSILON {
             return true;
         }
         match self.epsilon {

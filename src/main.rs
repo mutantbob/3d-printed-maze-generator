@@ -38,7 +38,7 @@ fn main() {
 
 pub fn draw_maze(fname: &str) -> Result<(), std::io::Error> {
     let generator = maze::MazeGenerator::new();
-    let topology1 = MazeTopology1::new(14, 12);
+    let topology1 = MazeTopology1::new(14, 14);
     let mut edges: Vec<_> = generator
         .generate_edges(
             HexCellAddress::new(0, 0),
@@ -242,6 +242,15 @@ fn debug_too_many_rings(rings: &RingAccumulator, mesh: &BlenderGeometry) {
             })
         {
             println!("{} = {:?} - {:?} @{}", dist, xyz1, xyz2, i);
+        }
+    }
+
+    let orange = [-5.000000476837158, 8.660253524780273, 39.3853645324707];
+
+    for xyz in mesh.get_vertices() {
+        let dist = L2_dist(xyz, &orange);
+        if dist < 0.1 {
+            println!("_ {} = {:?} - {:?}", dist, xyz, &orange);
         }
     }
 }

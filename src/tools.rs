@@ -82,7 +82,7 @@ impl MazeTopology1 {
         cell.u >= 0
             && cell.u < self.after_max_u
             && y >= -0.1 - *SEC_30
-            && y < self.max_y + *SEC_30 + 0.1
+            && y < self.max_y + *SEC_30 * 2.0 + 0.1
     }
 }
 

@@ -40,7 +40,15 @@ pub fn draw_maze(fname: &str) -> Result<(), std::io::Error> {
     let generator = maze::MazeGenerator::new();
     let topology1 = MazeTopology1::new(20, 3);
     let mut edges: Vec<_> = generator
-        .generate_edges(HexCellAddress::new(0, 0), |cell| topology1.neighbors(cell))
+        .generate_edges(
+            HexCellAddress::new(0, 0),
+            |cell| topology1.neighbors(cell),
+            Some(|end: &HexCellAddress| HexCellAddress::new(end.u, end.v + 1)),
+            |cell| {
+                let (_, y) = cell.coords_2d();
+                y + 0.2 >= topology1.max_y
+            },
+        )
         .into_iter()
         .map(|(c1, c2)| HexMazeEdge(c1, c2))
         .collect();
@@ -128,7 +136,7 @@ pub fn write_blender_python(
         finish_cylinder(
             &mut blender,
             cylindrical.scale_z(-2.0),
-            cylindrical.scale_z(topology.max_y + 2.0),
+            cylindrical.scale_z(topology.max_y + 2.5),
         );
     }
 

@@ -5,8 +5,17 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+name="generator"
+path="src/main.rs"
+
+[[bin]]
+name="robinson_test"
+path="src/robinson_test.rs"
+
 [dependencies]
 lazy_static = "*"
 rand = "*"
 assert_approx_eq = "*"
 rand_chacha = "*"
+euclid={version="*"}

@@ -171,9 +171,10 @@ where
         let xy3 = wall.coord_right(space);
         let v3 = with_r(xy3, delta_r);
 
-        let xy4 = space.midpoint(xy0, xy2);
+        let frac = 0.75;
+        let xy4 = space.lerp(xy0, frac, xy2);
         let v4 = with_r(xy4, delta_r);
-        let xy5 = space.midpoint(xy0, xy3);
+        let xy5 = space.lerp(xy0, frac, xy3);
         let v5 = with_r(xy5, delta_r);
 
         let v0 = space.to_blender(v0);
@@ -227,14 +228,16 @@ where
         let xy3 = edge.coord_right(space);
         let v3 = with_r(xy3, delta_r);
 
-        let xy4 = space.midpoint(xy0, xy2);
+        let frac = 0.75;
+
+        let xy4 = space.lerp(xy0, frac, xy2);
         let v4 = with_r(xy4, delta_r);
-        let xy5 = space.midpoint(xy0, xy3);
+        let xy5 = space.lerp(xy0, frac, xy3);
         let v5 = with_r(xy5, delta_r);
 
-        let xy6 = space.midpoint(xy1, xy2);
+        let xy6 = space.lerp(xy1, frac, xy2);
         let v6 = with_r(xy6, delta_r);
-        let xy7 = space.midpoint(xy1, xy3);
+        let xy7 = space.lerp(xy1, frac, xy3);
         let v7 = with_r(xy7, delta_r);
 
         let v0 = space.to_blender(v0);

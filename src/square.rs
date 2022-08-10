@@ -74,7 +74,7 @@ impl SquareMazeTopology {
     fn wall_bounds(&self, cell: &SqCellAddress) -> bool {
         cell.u >= 0
             && cell.u < self.u_count as i32
-            && cell.v >= -1
+            && cell.v >= -2
             && cell.v < 1 + self.v_count as i32
     }
 }
@@ -115,7 +115,7 @@ impl<'a> Topology<'a, SqCellAddress> for SquareMazeTopology {
     #[allow(clippy::needless_lifetimes)] // clippy is wrong.  removing the lifetime triggers an error in my version of rust
     fn all_cells(&'a self) -> Self::IterAll {
         Box::new((0..self.u_count).flat_map(move |u| {
-            (0..self.v_count).map(move |v| SqCellAddress::new(u as i32, v as i32))
+            (-1..(self.v_count as i32)).map(move |v| SqCellAddress::new(u as i32, v as i32))
         }))
     }
 }

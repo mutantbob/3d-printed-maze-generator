@@ -24,6 +24,7 @@ pub trait CellAddress: Copy {
 }
 
 pub trait Space<C> {
+    fn lerp(&self, a: C, t: f32, b: C) -> C;
     fn midpoint(&self, a: C, b: C) -> C;
     fn midpoint3(&self, a: C, b: C, c: C) -> C;
     // fn to_blender(&self, p: C) -> Point3D;
@@ -116,7 +117,23 @@ pub struct CylindricalSpace {
 }
 
 impl Space<(f32, f32)> for CylindricalSpace {
+    fn lerp(&self, a: (f32, f32), t: f32, b: (f32, f32)) -> (f32, f32) {
+        let rho1 = a.0;
+        let mut rho2 = b.0;
+        let old = rho2;
+        self.harmonize_angle(rho1, &mut rho2);
+        if old != rho2 {
+            println!("harmonized {} to {}", old, rho2);
+        }
+        let rho = lerp(rho1, t, rho2);
+        let z = lerp(a.1, t, b.1);
+        (rho, z)
+    }
+
     fn midpoint(&self, (rho1, z1): (f32, f32), (mut rho2, z2): (f32, f32)) -> (f32, f32) {
+        if true {
+            return self.lerp((rho1, z1), 0.5, (rho2, z2));
+        }
         let old = rho2;
         self.harmonize_angle(rho1, &mut rho2);
         if old != rho2 {

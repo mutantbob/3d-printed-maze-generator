@@ -85,9 +85,10 @@ pub fn draw_hex_maze(fname: &str) -> Result<(), std::io::Error> {
         "/tmp/geom-hex.py",
         &edges,
         &walls,
-        &topology1,
         &cylindrical,
         groove_depth,
+        -3.0,
+        topology1.maximum_y() + 2.5,
     )?;
 
     Ok(())
@@ -96,7 +97,7 @@ pub fn draw_hex_maze(fname: &str) -> Result<(), std::io::Error> {
 pub fn draw_square_maze(fname: &str) -> Result<(), std::io::Error> {
     let generator = maze::MazeGenerator::new();
 
-    let topology = SquareMazeTopology::new(20, 14);
+    let topology = SquareMazeTopology::new(14, 12);
 
     let mut rng = ChaCha8Rng::from_seed([7; 32]);
 
@@ -123,16 +124,17 @@ pub fn draw_square_maze(fname: &str) -> Result<(), std::io::Error> {
     let max_rho = topology.maximum_x();
     let groove_depth = 2.0;
     let cylindrical = CylindricalSpace {
-        r0: 14.5 - groove_depth,
+        r0: 15.0 - groove_depth,
         max_rho,
     };
     write_blender_python(
         "/tmp/geom-sq.py",
         edges.as_slice(),
         &walls,
-        &topology,
         &cylindrical,
         groove_depth,
+        -2.1,
+        topology.maximum_y() + 2.5,
     )?;
 
     Ok(())
@@ -142,9 +144,10 @@ pub fn write_blender_python<'a, CA: CellAddress>(
     fname: &str,
     edges: &[Edge<CA>],
     walls: &[MazeWall<CA>],
-    topology: &impl Topology<'a, CA>,
     cylindrical: &CylindricalSpace,
     groove_depth: f32,
+    prescale_bottom_z: f32,
+    prescale_top_z: f32,
 ) -> Result<(), std::io::Error>
 where
     Edge<CA>: EdgeCornerMapping<CA> + CorridorPolygons<CylindricalSpace>,
@@ -159,11 +162,11 @@ where
         add_wall(&mut blender, wall, groove_depth, cylindrical);
     }
 
-    if false {
+    if true {
         finish_cylinder(
             &mut blender,
-            cylindrical.scale_z(-3.0),
-            cylindrical.scale_z(topology.maximum_y() + 2.5),
+            cylindrical.scale_z(prescale_bottom_z),
+            cylindrical.scale_z(prescale_top_z),
         );
     }
 
@@ -176,7 +179,7 @@ where
     Ok(())
 }
 
-fn finish_cylinder(mesh: &mut BlenderGeometry, groove_r: f32, cylinder_r: f32) {
+fn finish_cylinder(mesh: &mut BlenderGeometry, bottom_z: f32, top_z: f32) {
     let mut edge_counts = HashMap::new();
 
     for face in mesh.face_iter() {

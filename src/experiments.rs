@@ -1,5 +1,5 @@
-use crate::tools::{CylindricalSpace, HexCellAddress, HexMazeEdge};
-use crate::BlenderGeometry;
+use crate::tools::{CylindricalSpace, HexCellAddress};
+use crate::{BlenderGeometry, CellAddress, Edge};
 use std::fs::File;
 use std::io::Write;
 
@@ -8,7 +8,7 @@ pub fn check_blender_math(fname: &str) -> Result<(), std::io::Error> {
 
     let mut blender = BlenderGeometry::new();
 
-    let edge = HexMazeEdge(HexCellAddress::new(0, 0), HexCellAddress::new(1, 0));
+    let edge = Edge::<HexCellAddress>(HexCellAddress::new(0, 0), HexCellAddress::new(1, 0));
 
     crate::add_edge_flat(
         &mut blender,

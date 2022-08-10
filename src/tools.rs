@@ -1,6 +1,7 @@
 use crate::{Point3D, SEC_30, TAN_30};
 use std::cmp::Ordering;
 use std::f32::consts::{PI, TAU};
+use std::hash::Hash;
 
 pub fn with_r(xz: (f32, f32), r: f32) -> CylindricalCoodinate {
     CylindricalCoodinate {
@@ -10,61 +11,51 @@ pub fn with_r(xz: (f32, f32), r: f32) -> CylindricalCoodinate {
     }
 }
 
+pub trait Topology<'a, CA> {
+    type IterNeighbors: Iterator<Item = CA>;
+    type IterAll: Iterator<Item = CA>;
+    type IterWall: Iterator<Item = CA>;
+
+    fn maximum_x(&self) -> f32;
+    fn maximum_y(&self) -> f32;
+
+    fn neighbors(&'a self, anchor: &CA) -> Self::IterNeighbors;
+
+    fn wall_neighbors(&'a self, anchor: &CA) -> Self::IterWall;
+
+    fn all_cells(&'a self) -> Self::IterAll;
+}
+
+pub trait Wall {}
+
+pub trait CellAddress: Copy {
+    fn coords_2d(&self) -> (f32, f32);
+}
+
+//
+
+pub struct Edge<CA>(pub CA, pub CA);
+
 pub struct CylindricalCoodinate {
     pub rho: f32,
     pub r: f32,
     pub z: f32,
 }
 
-pub struct MazeTopology1 {
+pub struct HexMazeTopology {
     pub after_max_u: i32,
     pub max_y: f32,
 }
 
-impl MazeTopology1 {
+impl HexMazeTopology {
     pub fn new(u_count: u32, v_count: u32) -> Self {
-        MazeTopology1 {
+        HexMazeTopology {
             after_max_u: u_count as i32,
             max_y: 0.1 + (v_count as f32) * *SEC_30,
         }
     }
 
-    pub(crate) fn neighbors<'a>(
-        &'a self,
-        anchor: &HexCellAddress,
-    ) -> impl Iterator<Item = HexCellAddress> + 'a {
-        anchor
-            .neighbors()
-            .into_iter()
-            .map(|n| self.wrap(n))
-            .filter(|n| self.in_bounds(n))
-    }
-
-    pub(crate) fn wall_neighbors<'a>(
-        &'a self,
-        anchor: &HexCellAddress,
-    ) -> impl Iterator<Item = HexCellAddress> + 'a {
-        anchor
-            .neighbors()
-            .into_iter()
-            .map(|n| self.wrap(n))
-            .filter(|n| self.wall_bounds(n))
-    }
-
-    #[allow(clippy::needless_lifetimes)] // clippy is wrong.  removing the lifetime triggers an error in my version of rust
-    pub(crate) fn all_cells<'a>(&'a self) -> impl Iterator<Item = HexCellAddress> + 'a {
-        let mut min_v = 0;
-        (0..self.after_max_u).flat_map(move |u| {
-            if self.wall_bounds(&HexCellAddress::new(u, min_v - 1)) {
-                min_v -= 1;
-            }
-            (min_v..9999)
-                .map(move |v| HexCellAddress::new(u, v))
-                .take_while(|cell| self.wall_bounds(cell))
-        })
-    }
-
-    pub(crate) fn wrap(&self, pre: HexCellAddress) -> HexCellAddress {
+    pub fn wrap(&self, pre: HexCellAddress) -> HexCellAddress {
         if false {
             return pre;
         }
@@ -96,6 +87,53 @@ impl MazeTopology1 {
     }
 }
 
+impl<'a> Topology<'a, HexCellAddress> for HexMazeTopology {
+    type IterNeighbors = Box<dyn Iterator<Item = HexCellAddress> + 'a>;
+    type IterAll = Box<dyn Iterator<Item = HexCellAddress> + 'a>;
+    type IterWall = Box<dyn Iterator<Item = HexCellAddress> + 'a>;
+
+    fn maximum_x(&self) -> f32 {
+        self.after_max_u as f32
+    }
+
+    fn maximum_y(&self) -> f32 {
+        self.max_y
+    }
+
+    fn neighbors(&'a self, anchor: &HexCellAddress) -> Self::IterNeighbors {
+        Box::new(
+            anchor
+                .neighbors()
+                .into_iter()
+                .map(|n| self.wrap(n))
+                .filter(|n| self.in_bounds(n)),
+        )
+    }
+
+    fn wall_neighbors(&'a self, anchor: &HexCellAddress) -> Self::IterWall {
+        Box::new(
+            anchor
+                .neighbors()
+                .into_iter()
+                .map(|n| self.wrap(n))
+                .filter(|n| self.wall_bounds(n)),
+        )
+    }
+
+    #[allow(clippy::needless_lifetimes)] // clippy is wrong.  removing the lifetime triggers an error in my version of rust
+    fn all_cells(&'a self) -> Self::IterAll {
+        let mut min_v = 0;
+        Box::new((0..self.after_max_u).flat_map(move |u| {
+            if self.wall_bounds(&HexCellAddress::new(u, min_v - 1)) {
+                min_v -= 1;
+            }
+            (min_v..9999)
+                .map(move |v| HexCellAddress::new(u, v))
+                .take_while(|cell| self.wall_bounds(cell))
+        }))
+    }
+}
+
 pub fn lerp(a: f32, t: f32, b: f32) -> f32 {
     a * (1.0 - t) + b * t
 }
@@ -111,12 +149,6 @@ impl HexCellAddress {
         HexCellAddress { u, v }
     }
 
-    pub fn coords_2d(&self) -> (f32, f32) {
-        let x = self.u as f32;
-        let y = self.u as f32 * *TAN_30 + self.v as f32 * *SEC_30;
-        (x, y)
-    }
-
     pub fn neighbors(&self) -> [HexCellAddress; 6] {
         [
             HexCellAddress::new(self.u, self.v + 1),
@@ -126,6 +158,14 @@ impl HexCellAddress {
             HexCellAddress::new(self.u - 1, self.v),
             HexCellAddress::new(self.u - 1, self.v + 1),
         ]
+    }
+}
+
+impl CellAddress for HexCellAddress {
+    fn coords_2d(&self) -> (f32, f32) {
+        let x = self.u as f32;
+        let y = self.u as f32 * *TAN_30 + self.v as f32 * *SEC_30;
+        (x, y)
     }
 }
 
@@ -151,26 +191,29 @@ impl Ord for HexCellAddress {
     }
 }
 
-pub struct HexMazeEdge(pub HexCellAddress, pub HexCellAddress);
+pub type HexMazeEdge = Edge<HexCellAddress>;
 
-impl HexMazeEdge {
-    pub fn coord_left(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32) {
+pub trait EdgeCornerMapping<CA> {
+    fn coord_left(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32);
+    fn coord_right(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32);
+}
+
+impl EdgeCornerMapping<HexCellAddress> for HexMazeEdge {
+    fn coord_left(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32) {
+        let frac = 0.5 * 0.5 / 0.75_f32.sqrt();
         let v1 = self.0.coords_2d();
         let v2 = self.1.coords_2d();
-        let frac = 0.5 * 0.5 / 0.75_f32.sqrt();
 
-        let (dx, dy) = space.subtract(v2, v1);
-
-        let x3 = v1.0 + dx * 0.5 - dy * frac;
-        let y3 = v1.1 + dy * 0.5 + dx * frac;
-        (x3, y3)
+        coord_left(v1, v2, frac, space)
     }
 
-    pub fn coord_right(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32) {
+    fn coord_right(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32) {
+        let frac = 0.5 * 0.5 / 0.75_f32.sqrt();
         let v1 = self.0.coords_2d();
         let v2 = self.1.coords_2d();
-        let frac = 0.5 * 0.5 / 0.75_f32.sqrt();
-
+        if false {
+            return coord_left(v1, v2, -frac, space);
+        }
         let (dx, dy) = space.subtract(v2, v1);
         let x3 = v1.0 + dx * 0.5 + dy * frac;
         let y3 = v1.1 + dy * 0.5 - dx * frac;
@@ -178,7 +221,20 @@ impl HexMazeEdge {
     }
 }
 
-impl PartialEq<Self> for HexMazeEdge {
+pub fn coord_left(
+    v1: (f32, f32),
+    v2: (f32, f32),
+    frac: f32,
+    space: &dyn Space<(f32, f32)>,
+) -> (f32, f32) {
+    let (dx, dy) = space.subtract(v2, v1);
+
+    let x3 = v1.0 + dx * 0.5 - dy * frac;
+    let y3 = v1.1 + dy * 0.5 + dx * frac;
+    (x3, y3)
+}
+
+impl<CA: PartialEq<CA>> PartialEq<Self> for Edge<CA> {
     fn eq(&self, other: &Self) -> bool {
         if self.0 == other.0 {
             self.1 == other.1
@@ -190,26 +246,20 @@ impl PartialEq<Self> for HexMazeEdge {
     }
 }
 
-impl Eq for HexMazeEdge {}
+impl<CA: PartialEq<CA>> Eq for Edge<CA> {}
 
 #[derive(Debug)]
-pub struct HexMazeWall {
-    pub a: HexCellAddress,
-    pub b: HexCellAddress,
+pub struct MazeWall<CA: CellAddress> {
+    pub a: CA,
+    pub b: CA,
     pub wall_ccw: bool,
     pub wall_cw: bool,
     pub wall_all: bool,
 }
 
-impl HexMazeWall {
-    pub fn new(
-        a: HexCellAddress,
-        b: HexCellAddress,
-        wall_ccw: bool,
-        wall_cw: bool,
-        wall_all: bool,
-    ) -> Self {
-        HexMazeWall {
+impl<CA: CellAddress> MazeWall<CA> {
+    pub fn new(a: CA, b: CA, wall_ccw: bool, wall_cw: bool, wall_all: bool) -> Self {
+        MazeWall {
             a,
             b,
             wall_ccw,
@@ -218,18 +268,25 @@ impl HexMazeWall {
         }
     }
 
-    fn edge(&self) -> HexMazeEdge {
-        HexMazeEdge(self.a, self.b)
+    fn edge(&self) -> Edge<CA> {
+        Edge(self.a, self.b)
     }
+}
 
-    pub(crate) fn coord_left(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32) {
+impl<CA: CellAddress> MazeWall<CA>
+where
+    Edge<CA>: EdgeCornerMapping<CA>,
+{
+    pub fn coord_left(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32) {
         self.edge().coord_left(space)
     }
 
-    pub(crate) fn coord_right(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32) {
+    pub fn coord_right(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32) {
         self.edge().coord_right(space)
     }
 }
+
+//
 
 pub trait Space<C> {
     fn midpoint(&self, a: C, b: C) -> C;
@@ -238,6 +295,12 @@ pub trait Space<C> {
 
     fn subtract(&self, p1: C, p2: C) -> C;
 }
+
+pub trait BlenderMapping<COORD> {
+    fn to_blender(&self, cc: COORD) -> Point3D;
+}
+
+//
 
 pub struct CylindricalSpace {
     pub r0: f32,
@@ -289,8 +352,10 @@ impl CylindricalSpace {
     pub fn scale_z(&self, z: f32) -> f32 {
         z * 2.0 * PI * self.r0 / self.max_rho
     }
+}
 
-    pub fn to_blender(&self, cc: CylindricalCoodinate) -> Point3D {
+impl BlenderMapping<CylindricalCoodinate> for CylindricalSpace {
+    fn to_blender(&self, cc: CylindricalCoodinate) -> Point3D {
         let r0 = self.r0;
         let max_rho = self.max_rho;
 
@@ -337,7 +402,7 @@ pub struct RingAccumulator {
 }
 
 impl RingAccumulator {
-    pub(crate) fn absorb(&mut self, p1: Point3D, p2: Point3D) {
+    pub fn absorb(&mut self, p1: Point3D, p2: Point3D) {
         for idx in 0..self.open_strings.len() {
             let string = &mut self.open_strings[idx];
             let cmd = Self::command_for(&p1, &p2, string);
@@ -441,3 +506,153 @@ impl RingAccumulator {
         delta < 1.0e-6
     }
 }
+
+//
+
+//
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+pub struct SqCellAddress {
+    pub u: i32,
+    pub v: i32,
+}
+
+impl SqCellAddress {
+    pub fn new(u: i32, v: i32) -> Self {
+        SqCellAddress { u, v }
+    }
+
+    pub fn neighbors(&self) -> [SqCellAddress; 4] {
+        let SqCellAddress { u, v } = *self;
+        [
+            SqCellAddress::new(u - 1, v),
+            SqCellAddress::new(u, v - 1),
+            SqCellAddress::new(u + 1, v),
+            SqCellAddress::new(u, v + 1),
+        ]
+    }
+}
+
+impl CellAddress for SqCellAddress {
+    fn coords_2d(&self) -> (f32, f32) {
+        (self.u as f32, self.v as f32)
+    }
+}
+
+impl EdgeCornerMapping<SqCellAddress> for Edge<SqCellAddress> {
+    fn coord_left(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32) {
+        coord_left(self.0.coords_2d(), self.1.coords_2d(), 0.5, space)
+    }
+
+    fn coord_right(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32) {
+        coord_left(self.0.coords_2d(), self.1.coords_2d(), -0.5, space)
+    }
+}
+
+//
+
+pub struct SquareMazeTopology {
+    pub u_count: u32,
+    pub v_count: u32,
+}
+
+impl SquareMazeTopology {
+    pub fn new(u_count: u32, v_count: u32) -> Self {
+        SquareMazeTopology { u_count, v_count }
+    }
+
+    pub fn wrap(&self, pre: SqCellAddress) -> SqCellAddress {
+        if false {
+            return pre;
+        }
+
+        let mut u = pre.u;
+        let v = pre.v;
+        while u < 0 {
+            u += self.u_count as i32;
+        }
+        while u >= self.u_count as i32 {
+            u -= self.u_count as i32;
+        }
+        SqCellAddress::new(u, v)
+    }
+
+    fn in_bounds(&self, cell: &SqCellAddress) -> bool {
+        cell.u >= 0 && cell.u < self.u_count as i32 && cell.v >= 0 && cell.v < self.v_count as i32
+    }
+
+    fn wall_bounds(&self, cell: &SqCellAddress) -> bool {
+        cell.u >= 0
+            && cell.u < self.u_count as i32
+            && cell.v >= -1
+            && cell.v < 1 + self.v_count as i32
+    }
+}
+
+impl<'a> Topology<'a, SqCellAddress> for SquareMazeTopology {
+    type IterNeighbors = Box<dyn Iterator<Item = SqCellAddress> + 'a>;
+    type IterAll = Box<dyn Iterator<Item = SqCellAddress> + 'a>;
+    type IterWall = Box<dyn Iterator<Item = SqCellAddress> + 'a>;
+
+    fn maximum_x(&self) -> f32 {
+        self.u_count as f32
+    }
+
+    fn maximum_y(&self) -> f32 {
+        self.v_count as f32
+    }
+
+    fn neighbors(&'a self, anchor: &SqCellAddress) -> Self::IterNeighbors {
+        Box::new(
+            anchor
+                .neighbors()
+                .into_iter()
+                .map(|n| self.wrap(n))
+                .filter(|n| self.in_bounds(n)),
+        )
+    }
+
+    fn wall_neighbors(&'a self, anchor: &SqCellAddress) -> Self::IterWall {
+        Box::new(
+            anchor
+                .neighbors()
+                .into_iter()
+                .map(|n| self.wrap(n))
+                .filter(|n| self.wall_bounds(n)),
+        )
+    }
+
+    #[allow(clippy::needless_lifetimes)] // clippy is wrong.  removing the lifetime triggers an error in my version of rust
+    fn all_cells(&'a self) -> Self::IterAll {
+        Box::new((0..self.u_count).flat_map(move |u| {
+            (0..self.v_count).map(move |v| SqCellAddress::new(u as i32, v as i32))
+        }))
+    }
+}
+/*
+struct SMTNeighbors<'a> {
+    base: Box<dyn Iterator<Item = SqCellAddress> + 'a>,
+}
+
+impl<'a> SMTNeighbors<'a> {
+    pub fn new(topology: &'a SquareMazeTopology, anchor: &'a SqCellAddress) -> Self {
+        SMTNeighbors {
+            base: Box::new(
+                anchor
+                    .neighbors()
+                    .into_iter()
+                    .map(|n| topology.wrap(n))
+                    .filter(|n| topology.in_bounds(n)),
+            ),
+        }
+    }
+}
+
+impl<'a> Iterator for SMTNeighbors<'a> {
+    type Item = SqCellAddress;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.base.next()
+    }
+}
+*/

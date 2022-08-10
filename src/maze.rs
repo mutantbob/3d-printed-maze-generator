@@ -1,5 +1,4 @@
-use rand::{Rng, SeedableRng};
-use rand_chacha::ChaCha8Rng;
+use rand::Rng;
 use std::cmp::Ordering;
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
@@ -24,6 +23,7 @@ where
 
     pub fn generate_edges<FN, F2, F3, I>(
         mut self,
+        rng: &mut impl Rng,
         start: T,
         neighbors: FN,
         finisher: Option<F2>,
@@ -37,9 +37,6 @@ where
         F3: Fn(&T) -> bool,
     {
         self.boundary.push(start.clone());
-
-        // let mut rng = rand::thread_rng();
-        let mut rng = ChaCha8Rng::from_seed([7; 32]);
 
         let mut rval = vec![];
         loop {
@@ -74,7 +71,7 @@ where
         }
 
         if let Some(finisher) = finisher {
-            self.augment(&mut rval, start, &mut rng, finisher, eligible_to_finish);
+            self.augment(&mut rval, start, rng, finisher, eligible_to_finish);
         }
 
         rval

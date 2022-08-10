@@ -1,12 +1,12 @@
 use crate::tools::{
-    with_r, CylindricalSpace, HexCellAddress, HexMazeEdge, HexMazeWall, MazeTopology1,
+    with_r, CylindricalSpace, HexCellAddress, HexMazeEdge, HexMazeTopology, HexMazeWall,
     RingAccumulator, Space,
 };
 use assert_approx_eq::assert_approx_eq;
 
 #[test]
 pub fn test1() {
-    let topology1 = crate::MazeTopology1::new(10, 10);
+    let topology1 = crate::HexMazeTopology::new(10, 10);
     let c1 = HexCellAddress::new(0, 5);
     let c2 = HexCellAddress::new(10, 0);
     let c2w = topology1.wrap(c2);
@@ -102,7 +102,7 @@ pub fn test_corners_4() {
 
 #[test]
 pub fn test_topology_1() {
-    let topology = MazeTopology1::new(20, 10);
+    let topology = HexMazeTopology::new(20, 10);
 
     let ns: Vec<_> = topology.neighbors(&HexCellAddress::new(0, 3)).collect();
 

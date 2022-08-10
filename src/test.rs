@@ -1,7 +1,6 @@
-use crate::tools::{
-    with_r, CylindricalSpace, HexCellAddress, HexMazeEdge, HexMazeTopology, HexMazeWall,
-    RingAccumulator, Space,
-};
+use crate::hexagonal::{HexCellAddress, HexMazeEdge, HexMazeTopology};
+use crate::ring::RingAccumulator;
+use crate::tools::{with_r, CylindricalSpace, HexMazeWall, Space};
 use assert_approx_eq::assert_approx_eq;
 
 #[test]

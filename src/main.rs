@@ -1,31 +1,30 @@
 use blender_geometry::{BlenderGeometry, Point3D};
-use lazy_static::lazy_static;
+use hexagonal::{HexCellAddress, HexMazeTopology};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
+use ring::RingAccumulator;
+use square::{SqCellAddress, SquareMazeTopology};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use tools::{
     with_r, BidirectionalEdge, BlenderMapping, CellAddress, CylindricalCoodinate, CylindricalSpace,
-    Edge, EdgeCornerMapping, HexCellAddress, HexMazeTopology, MazeWall, RingAccumulator, Space,
-    SqCellAddress, SquareMazeTopology, Topology,
+    Edge, EdgeCornerMapping, MazeWall, Space, Topology,
 };
 
 mod blender_geometry;
 mod experiments;
+mod hexagonal;
 mod maze;
+mod ring;
+mod square;
 #[cfg(test)]
 mod test;
 mod tools;
 
-lazy_static! {
-    static ref TAN_30: f32 = 1.0f32 / 3.0f32.sqrt();
-    static ref SEC_30: f32 = 2.0f32 / 3.0f32.sqrt();
-}
-
 fn main() {
-    match 4 {
+    match 2 {
         2 => {
             let _ = draw_hex_maze("/tmp/x.svg");
         }

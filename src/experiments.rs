@@ -1,4 +1,5 @@
-use crate::tools::{CylindricalSpace, HexCellAddress};
+use crate::hexagonal::HexCellAddress;
+use crate::tools::CylindricalSpace;
 use crate::{BlenderGeometry, CellAddress, Edge};
 use std::fs::File;
 use std::io::Write;

@@ -208,16 +208,19 @@ fn finish_cylinder(mesh: &mut BlenderGeometry, bottom_z: f32, top_z: f32) {
                     println!("alarmingly vertical edge, this could cause problems")
                 }
 
-                let z0 = if z1 < 0.5 * (groove_r + cylinder_r) {
-                    groove_r
-                } else {
-                    cylinder_r
-                };
+                let low = z1 < 0.5 * (bottom_z + top_z);
+                let clockwise = is_clockwise((x1, y1), (x2, y2));
+                let z0 = if low { bottom_z } else { top_z };
 
                 let v3 = [x1, y1, z0];
                 let v4 = [x2, y2, z0];
-                accum.absorb(v3, v4);
-                mesh.add_face(&[[x1, y1, z1], v3, v4, [x2, y2, z2]])
+                if low != clockwise {
+                    accum.absorb(v4, v3); // this affects the order of the final ring
+                    mesh.add_face(&[[x1, y1, z1], v3, v4, [x2, y2, z2]])
+                } else {
+                    accum.absorb(v3, v4);
+                    mesh.add_face(&[[x1, y1, z1], [x2, y2, z2], v4, v3])
+                }
             }
         }
     }
@@ -235,6 +238,11 @@ fn finish_cylinder(mesh: &mut BlenderGeometry, bottom_z: f32, top_z: f32) {
             mesh.add_face(ring);
         }
     }
+}
+
+fn is_clockwise((x1, y1): (f32, f32), (x2, y2): (f32, f32)) -> bool {
+    let cross = x1 * y2 - y1 * x2;
+    cross < 0.0
 }
 
 pub fn save_edges_svg<CA: CellAddress>(

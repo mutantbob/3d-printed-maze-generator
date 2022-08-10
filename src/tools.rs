@@ -2,14 +2,6 @@ use crate::Point3D;
 use std::f32::consts::{PI, TAU};
 use std::hash::Hash;
 
-pub fn with_r(xz: (f32, f32), r: f32) -> CylindricalCoodinate {
-    CylindricalCoodinate {
-        rho: xz.0,
-        z: xz.1,
-        r,
-    }
-}
-
 pub trait Topology<'a, CA> {
     type IterNeighbors: Iterator<Item = CA>;
     type IterAll: Iterator<Item = CA>;
@@ -31,18 +23,16 @@ pub trait CellAddress: Copy {
     fn coords_2d(&self) -> (f32, f32);
 }
 
-//
+pub trait Space<C> {
+    fn midpoint(&self, a: C, b: C) -> C;
+    fn midpoint3(&self, a: C, b: C, c: C) -> C;
+    // fn to_blender(&self, p: C) -> Point3D;
 
-pub struct Edge<CA>(pub CA, pub CA);
-
-pub struct CylindricalCoodinate {
-    pub rho: f32,
-    pub r: f32,
-    pub z: f32,
+    fn subtract(&self, p1: C, p2: C) -> C;
 }
 
-pub fn lerp(a: f32, t: f32, b: f32) -> f32 {
-    a * (1.0 - t) + b * t
+pub trait BlenderMapping<COORD> {
+    fn to_blender(&self, cc: COORD) -> Point3D;
 }
 
 pub trait EdgeCornerMapping<CA> {
@@ -50,18 +40,17 @@ pub trait EdgeCornerMapping<CA> {
     fn coord_right(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32);
 }
 
-pub fn coord_left(
-    v1: (f32, f32),
-    v2: (f32, f32),
-    frac: f32,
-    space: &dyn Space<(f32, f32)>,
-) -> (f32, f32) {
-    let (dx, dy) = space.subtract(v2, v1);
+//
 
-    let x3 = v1.0 + dx * 0.5 - dy * frac;
-    let y3 = v1.1 + dy * 0.5 + dx * frac;
-    (x3, y3)
+pub struct CylindricalCoodinate {
+    pub rho: f32,
+    pub r: f32,
+    pub z: f32,
 }
+
+//
+
+pub struct Edge<CA>(pub CA, pub CA);
 
 impl<CA: PartialEq<CA>> PartialEq<Self> for Edge<CA> {
     fn eq(&self, other: &Self) -> bool {
@@ -76,6 +65,8 @@ impl<CA: PartialEq<CA>> PartialEq<Self> for Edge<CA> {
 }
 
 impl<CA: PartialEq<CA>> Eq for Edge<CA> {}
+
+//
 
 #[derive(Debug)]
 pub struct MazeWall<CA: CellAddress> {
@@ -116,20 +107,6 @@ where
 }
 
 //
-
-pub trait Space<C> {
-    fn midpoint(&self, a: C, b: C) -> C;
-    fn midpoint3(&self, a: C, b: C, c: C) -> C;
-    // fn to_blender(&self, p: C) -> Point3D;
-
-    fn subtract(&self, p1: C, p2: C) -> C;
-}
-
-//
-
-pub trait BlenderMapping<COORD> {
-    fn to_blender(&self, cc: COORD) -> Point3D;
-}
 
 //
 
@@ -219,4 +196,33 @@ impl BidirectionalEdge {
             }
         }
     }
+}
+
+//
+//
+//
+
+pub fn with_r(xz: (f32, f32), r: f32) -> CylindricalCoodinate {
+    CylindricalCoodinate {
+        rho: xz.0,
+        z: xz.1,
+        r,
+    }
+}
+
+pub fn lerp(a: f32, t: f32, b: f32) -> f32 {
+    a * (1.0 - t) + b * t
+}
+
+pub fn coord_left(
+    v1: (f32, f32),
+    v2: (f32, f32),
+    frac: f32,
+    space: &dyn Space<(f32, f32)>,
+) -> (f32, f32) {
+    let (dx, dy) = space.subtract(v2, v1);
+
+    let x3 = v1.0 + dx * 0.5 - dy * frac;
+    let y3 = v1.1 + dy * 0.5 + dx * frac;
+    (x3, y3)
 }

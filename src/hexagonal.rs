@@ -8,6 +8,84 @@ lazy_static! {
     static ref SEC_30: f32 = 2.0f32 / 3.0f32.sqrt();
 }
 
+#[derive(Eq, Hash, PartialEq, Debug, Copy, Clone)]
+pub struct HexCellAddress {
+    pub u: i32,
+    pub v: i32,
+}
+
+impl HexCellAddress {
+    pub fn new(u: i32, v: i32) -> Self {
+        HexCellAddress { u, v }
+    }
+
+    pub fn neighbors(&self) -> [HexCellAddress; 6] {
+        [
+            HexCellAddress::new(self.u, self.v + 1),
+            HexCellAddress::new(self.u + 1, self.v),
+            HexCellAddress::new(self.u + 1, self.v - 1),
+            HexCellAddress::new(self.u, self.v - 1),
+            HexCellAddress::new(self.u - 1, self.v),
+            HexCellAddress::new(self.u - 1, self.v + 1),
+        ]
+    }
+}
+
+impl CellAddress for HexCellAddress {
+    fn coords_2d(&self) -> (f32, f32) {
+        let x = self.u as f32;
+        let y = self.u as f32 * *TAN_30 + self.v as f32 * *SEC_30;
+        (x, y)
+    }
+}
+
+impl PartialOrd<Self> for HexCellAddress {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for HexCellAddress {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.u < other.u {
+            Ordering::Less
+        } else if self.u > other.u {
+            Ordering::Greater
+        } else if self.v < other.v {
+            Ordering::Less
+        } else if self.v > other.v {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
+    }
+}
+
+impl EdgeCornerMapping<HexCellAddress> for HexMazeEdge {
+    fn coord_left(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32) {
+        let frac = 0.5 * 0.5 / 0.75_f32.sqrt();
+        let v1 = self.0.coords_2d();
+        let v2 = self.1.coords_2d();
+
+        coord_left(v1, v2, frac, space)
+    }
+
+    fn coord_right(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32) {
+        let frac = 0.5 * 0.5 / 0.75_f32.sqrt();
+        let v1 = self.0.coords_2d();
+        let v2 = self.1.coords_2d();
+        if false {
+            return coord_left(v1, v2, -frac, space); // try this, later
+        }
+        let (dx, dy) = space.subtract(v2, v1);
+        let x3 = v1.0 + dx * 0.5 + dy * frac;
+        let y3 = v1.1 + dy * 0.5 - dx * frac;
+        (x3, y3)
+    }
+}
+
+//
+
 pub struct HexMazeTopology {
     pub after_max_u: i32,
     pub max_y: f32,
@@ -100,80 +178,6 @@ impl<'a> Topology<'a, HexCellAddress> for HexMazeTopology {
     }
 }
 
-impl HexCellAddress {
-    pub fn new(u: i32, v: i32) -> Self {
-        HexCellAddress { u, v }
-    }
-
-    pub fn neighbors(&self) -> [HexCellAddress; 6] {
-        [
-            HexCellAddress::new(self.u, self.v + 1),
-            HexCellAddress::new(self.u + 1, self.v),
-            HexCellAddress::new(self.u + 1, self.v - 1),
-            HexCellAddress::new(self.u, self.v - 1),
-            HexCellAddress::new(self.u - 1, self.v),
-            HexCellAddress::new(self.u - 1, self.v + 1),
-        ]
-    }
-}
-
-#[derive(Eq, Hash, PartialEq, Debug, Copy, Clone)]
-pub struct HexCellAddress {
-    pub u: i32,
-    pub v: i32,
-}
-
-impl CellAddress for HexCellAddress {
-    fn coords_2d(&self) -> (f32, f32) {
-        let x = self.u as f32;
-        let y = self.u as f32 * *TAN_30 + self.v as f32 * *SEC_30;
-        (x, y)
-    }
-}
-
-impl PartialOrd<Self> for HexCellAddress {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for HexCellAddress {
-    fn cmp(&self, other: &Self) -> Ordering {
-        if self.u < other.u {
-            Ordering::Less
-        } else if self.u > other.u {
-            Ordering::Greater
-        } else if self.v < other.v {
-            Ordering::Less
-        } else if self.v > other.v {
-            Ordering::Greater
-        } else {
-            Ordering::Equal
-        }
-    }
-}
-
-impl EdgeCornerMapping<HexCellAddress> for HexMazeEdge {
-    fn coord_left(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32) {
-        let frac = 0.5 * 0.5 / 0.75_f32.sqrt();
-        let v1 = self.0.coords_2d();
-        let v2 = self.1.coords_2d();
-
-        coord_left(v1, v2, frac, space)
-    }
-
-    fn coord_right(&self, space: &dyn Space<(f32, f32)>) -> (f32, f32) {
-        let frac = 0.5 * 0.5 / 0.75_f32.sqrt();
-        let v1 = self.0.coords_2d();
-        let v2 = self.1.coords_2d();
-        if false {
-            return coord_left(v1, v2, -frac, space); // try this, later
-        }
-        let (dx, dy) = space.subtract(v2, v1);
-        let x3 = v1.0 + dx * 0.5 + dy * frac;
-        let y3 = v1.1 + dy * 0.5 - dx * frac;
-        (x3, y3)
-    }
-}
+//
 
 pub type HexMazeEdge = Edge<HexCellAddress>;

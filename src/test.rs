@@ -1,6 +1,7 @@
-use crate::hexagonal::{HexCellAddress, HexMazeEdge, HexMazeTopology};
+use crate::hexagonal::{HexCellAddress, HexMazeTopology};
 use crate::ring::RingAccumulator;
-use crate::tools::{with_r, CylindricalSpace, HexMazeWall, Space};
+use crate::tools::{with_r, CylindricalSpace, MazeWall, Space};
+use crate::{BlenderMapping, CellAddress, Edge, EdgeCornerMapping, Topology};
 use assert_approx_eq::assert_approx_eq;
 
 #[test]
@@ -18,7 +19,7 @@ pub fn test_corners_1() {
     let space = cspace20();
     let c0 = HexCellAddress::new(0, 0);
     let c1 = HexCellAddress::new(1, 0);
-    let edge = HexMazeEdge(c0, c1);
+    let edge = Edge(c0, c1);
 
     let (x, y) = edge.coord_left(&space);
     assert_eq!((0.0, 0.0), c0.coords_2d());
@@ -43,7 +44,7 @@ const fn cspace20() -> CylindricalSpace {
 pub fn test_corners_2() {
     let c0 = HexCellAddress::new(4, 0);
     let c1 = HexCellAddress::new(5, 0);
-    let edge = HexMazeEdge(c0, c1);
+    let edge = Edge(c0, c1);
 
     let (x0, y0) = c0.coords_2d();
     assert_eq!((4.0, 2.309401), (x0, y0));
@@ -60,7 +61,7 @@ pub fn test_corners_2() {
 pub fn test_corners_3() {
     let c1 = HexCellAddress::new(4, 0);
     let c0 = HexCellAddress::new(5, 0);
-    let edge = HexMazeEdge(c0, c1);
+    let edge = Edge(c0, c1);
 
     let (x0, y0) = c1.coords_2d();
     assert_eq!((4.0, 2.309401), (x0, y0));
@@ -78,7 +79,7 @@ pub fn test_corners_3() {
 pub fn test_corners_4() {
     let c1 = HexCellAddress::new(4, 0);
     let c0 = HexCellAddress::new(4, 1);
-    let edge = HexMazeEdge(c0, c1);
+    let edge = Edge(c0, c1);
 
     let (x0, y0) = c1.coords_2d();
     assert_eq!((4.0, 2.309401), (x0, y0));
@@ -127,7 +128,7 @@ pub fn test_wall() {
     let low_z = 0.0;
     let high_z = 0.3;
 
-    let wall = HexMazeWall::new(
+    let wall = MazeWall::new(
         HexCellAddress::new(19, -9),
         HexCellAddress::new(0, 1),
         true,

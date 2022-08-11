@@ -24,7 +24,7 @@ pub trait CellAddress: Copy {
 }
 
 pub trait Space<C> {
-    fn lerp(&self, a: C, t: f32, b: C) -> C;
+    fn lerp(&self, a: &C, t: f32, b: &C) -> C;
     fn midpoint(&self, a: C, b: C) -> C;
     fn midpoint3(&self, a: C, b: C, c: C) -> C;
     // fn to_blender(&self, p: C) -> Point3D;
@@ -43,10 +43,17 @@ pub trait EdgeCornerMapping<CA> {
 
 //
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CylindricalCoodinate {
     pub rho: f32,
     pub r: f32,
     pub z: f32,
+}
+
+impl CylindricalCoodinate {
+    pub fn new(rho: f32, r: f32, z: f32) -> Self {
+        CylindricalCoodinate { rho, r, z }
+    }
 }
 
 //
@@ -117,7 +124,7 @@ pub struct CylindricalSpace {
 }
 
 impl Space<(f32, f32)> for CylindricalSpace {
-    fn lerp(&self, a: (f32, f32), t: f32, b: (f32, f32)) -> (f32, f32) {
+    fn lerp(&self, a: &(f32, f32), t: f32, b: &(f32, f32)) -> (f32, f32) {
         let rho1 = a.0;
         let mut rho2 = b.0;
         let old = rho2;
@@ -132,7 +139,7 @@ impl Space<(f32, f32)> for CylindricalSpace {
 
     fn midpoint(&self, (rho1, z1): (f32, f32), (mut rho2, z2): (f32, f32)) -> (f32, f32) {
         if true {
-            return self.lerp((rho1, z1), 0.5, (rho2, z2));
+            return self.lerp(&(rho1, z1), 0.5, &(rho2, z2));
         }
         let old = rho2;
         self.harmonize_angle(rho1, &mut rho2);

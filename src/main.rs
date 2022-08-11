@@ -140,7 +140,7 @@ pub fn draw_square_maze(fname: &str) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-pub fn write_blender_python<'a, CA: CellAddress>(
+pub fn write_blender_python<CA: CellAddress>(
     fname: &str,
     edges: &[Edge<CA>],
     walls: &[MazeWall<CA>],

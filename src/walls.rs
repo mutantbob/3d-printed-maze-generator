@@ -183,7 +183,9 @@ where
             let face2 = [v5, v3, v2, v4];
             let faces = [face1.as_slice(), face2.as_slice()];
 
-            // let faces = subdivide_faces(faces, 0.25);
+            println!("debug wall polygons; subdivide {:?}", faces);
+
+            let faces = subdivide_faces(faces, 0.25);
 
             faces
                 .into_iter()
@@ -441,8 +443,9 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::walls::{sorted_set, subdivide_face};
+    use crate::walls::{sorted_set, subdivide_face, subdivide_faces};
     use crate::CylindricalCoodinate;
+    use approx::assert_abs_diff_eq;
 
     #[test]
     pub fn test_sorted_set() {
@@ -608,5 +611,90 @@ mod test {
                 CylindricalCoodinate::new(0.0, 0.0, 0.0),
             ],
         );
+    }
+
+    #[test]
+    pub fn test_subdivide_4() {
+        let faces = subdivide_face(
+            &[
+                CylindricalCoodinate::new(-0.75, 1.0, 0.0),
+                CylindricalCoodinate::new(0.0, 0.0, 0.0),
+                CylindricalCoodinate::new(-1.0, -1.0, 2.0),
+            ],
+            0.5,
+        );
+
+        assert_eq!(3, faces.len());
+
+        assert_eq!(
+            faces[0],
+            vec![
+                CylindricalCoodinate::new(-1.0, -1.0, 2.0),
+                CylindricalCoodinate::new(-0.75, 1.0, 0.0),
+                CylindricalCoodinate::new(-0.5, -0.5, 1.0),
+            ]
+        );
+
+        // println!("faces[1] = {:?}", faces[1]);
+        assert_eq!(3, faces[1].len());
+        assert_abs_diff_eq!(faces[1][0], CylindricalCoodinate::new(-0.5, -0.5, 1.0));
+        assert_abs_diff_eq!(faces[1][1], CylindricalCoodinate::new(-0.75, 1.0, 0.0));
+        assert_abs_diff_eq!(faces[1][2], CylindricalCoodinate::new(-0.5, 2.0 / 3.0, 0.0),);
+
+        assert_eq!(3, faces[2].len());
+        assert_abs_diff_eq!(faces[2][0], CylindricalCoodinate::new(-0.5, -0.5, 1.0));
+        assert_abs_diff_eq!(faces[2][1], CylindricalCoodinate::new(-0.5, 2.0 / 3.0, 0.0),);
+        assert_abs_diff_eq!(faces[2][2], CylindricalCoodinate::new(0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    pub fn test_subdivide_5() {
+        let face1 = [
+            CylindricalCoodinate {
+                rho: 0.0,
+                r: 0.0,
+                z: -1.0,
+            },
+            CylindricalCoodinate {
+                rho: -0.375,
+                r: 2.0,
+                z: -1.375,
+            },
+            CylindricalCoodinate {
+                rho: 0.375,
+                r: 2.0,
+                z: -1.375,
+            },
+        ];
+        let face2 = [
+            CylindricalCoodinate {
+                rho: -0.375,
+                r: 2.0,
+                z: -1.375,
+            },
+            CylindricalCoodinate {
+                rho: -0.5,
+                r: 2.0,
+                z: -1.5,
+            },
+            CylindricalCoodinate {
+                rho: 0.5,
+                r: 2.0,
+                z: -1.5,
+            },
+            CylindricalCoodinate {
+                rho: 0.375,
+                r: 2.0,
+                z: -1.375,
+            },
+        ];
+        let faces = [face1.as_slice(), face2.as_slice()];
+
+        let faces = subdivide_faces(faces, 0.25);
+
+        println!("ts5 {:#?}", &faces);
+        for face in faces {
+            assert!(face.len() > 2)
+        }
     }
 }

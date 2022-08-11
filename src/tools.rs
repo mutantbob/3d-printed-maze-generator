@@ -56,6 +56,21 @@ impl CylindricalCoodinate {
     }
 }
 
+#[cfg(test)]
+impl approx::AbsDiffEq for CylindricalCoodinate {
+    type Epsilon = f32;
+
+    fn default_epsilon() -> Self::Epsilon {
+        1.0e-5
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        self.rho.abs_diff_eq(&other.rho, epsilon)
+            && self.r.abs_diff_eq(&other.r, epsilon)
+            && self.z.abs_diff_eq(&other.z, epsilon)
+    }
+}
+
 //
 
 pub struct Edge<CA>(pub CA, pub CA);

@@ -1,3 +1,5 @@
+extern crate core;
+
 use crate::walls::{add_edge_flat, add_wall, compute_walls};
 use blender_geometry::{BlenderGeometry, Point3D};
 use hexagonal::{HexCellAddress, HexMazeTopology};

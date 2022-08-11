@@ -21,6 +21,7 @@ mod blender_geometry;
 mod experiments;
 mod hexagonal;
 mod maze;
+mod polygon_split;
 mod ring;
 mod square;
 #[cfg(test)]

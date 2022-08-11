@@ -30,6 +30,8 @@ pub trait Space<C> {
     // fn to_blender(&self, p: C) -> Point3D;
 
     fn subtract(&self, p1: C, p2: C) -> C;
+
+    fn maybe_wrap(&self, c: &mut C, anchor: &C);
 }
 
 pub trait BlenderMapping<COORD> {
@@ -182,6 +184,10 @@ impl Space<(f32, f32)> for CylindricalSpace {
         self.harmonize_angle(rho1, &mut rho2);
 
         (rho1 - rho2, p1.1 - p2.1)
+    }
+
+    fn maybe_wrap(&self, c: &mut (f32, f32), anchor: &(f32, f32)) {
+        self.harmonize_angle(anchor.0, &mut c.0)
     }
 }
 

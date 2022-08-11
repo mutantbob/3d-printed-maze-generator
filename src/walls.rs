@@ -187,10 +187,7 @@ where
 
             let faces = subdivide_faces(faces, 0.25);
 
-            faces
-                .into_iter()
-                .map(|face| face.iter().map(|cc| space.to_blender(*cc)).collect())
-                .collect()
+            multi_face_to_blender(space, faces)
         } else {
             let v0 = space.to_blender(v0);
             let v2 = space.to_blender(v2);
@@ -201,6 +198,30 @@ where
             vec![vec![v0, v5, v4], vec![v5, v3, v2, v4]]
         }
     }
+}
+
+fn multi_face_to_blender<'a, SPACE, I>(
+    space: &SPACE,
+    faces: impl IntoIterator<Item = I>,
+) -> Vec<Vec<Point3D>>
+where
+    SPACE: BlenderMapping<CylindricalCoodinate>,
+    I: IntoIterator<Item = CylindricalCoodinate>,
+{
+    faces
+        .into_iter()
+        .map(|face| face_to_blender(space, face.into_iter()))
+        .collect()
+}
+
+fn face_to_blender<'a, SPACE>(
+    space: &SPACE,
+    face: impl IntoIterator<Item = CylindricalCoodinate>,
+) -> Vec<Point3D>
+where
+    SPACE: BlenderMapping<CylindricalCoodinate>,
+{
+    face.into_iter().map(|cc| space.to_blender(cc)).collect()
 }
 
 //
@@ -218,9 +239,12 @@ where
 {
     fn calculate_path_polygons(&self, delta_r: f32, space: &SPACE) -> Vec<Vec<Point3D>> {
         let edge = self;
-        let tzr0 = with_r(edge.0.coords_2d(), 0.0);
+        let tz0 = edge.0.coords_2d();
+        let mut tz1 = edge.1.coords_2d();
+        space.maybe_wrap(&mut tz1, &tz0);
+        let tzr0 = with_r(tz0, 0.0);
         // let v0 = space.to_blender(tzr0);
-        let tzr1 = with_r(edge.1.coords_2d(), 0.0);
+        let tzr1 = with_r(tz1, 0.0);
         // let v1 = space.to_blender(tzr1);
 
         let tzr2 = with_r(edge.coord_left(space), delta_r);
@@ -228,14 +252,13 @@ where
         let tzr3 = with_r(edge.coord_right(space), delta_r);
         // let v3 = space.to_blender(tzr3);
 
-        let faces = [[tzr0, tzr1, tzr2], [tzr1, tzr0, tzr3]];
-        // let faces = subdivide_faces(&faces, 0.25);
+        let face1 = [tzr0, tzr1, tzr2];
+        let face2 = [tzr1, tzr0, tzr3];
+        let faces = [face1.as_slice(), face2.as_slice()];
+        let faces = subdivide_faces(faces, 0.25);
 
         //vec![vec![v0, v1, v2], vec![v1, v0, v3]]
-        faces
-            .into_iter()
-            .map(|face| face.into_iter().map(|cc| space.to_blender(cc)).collect())
-            .collect()
+        multi_face_to_blender(space, faces)
     }
 }
 
@@ -258,111 +281,210 @@ fn subdivide_face(
     let mut rval = vec![];
 
     // XXX do something about coordinate wrapping
-    // find the min_theta
-    let raw_thetas = face.iter().map(|cc| cc.rho);
-    let thetas = sorted_set(raw_thetas);
-    let min_theta = thetas[0];
 
-    // find an idx of a coordinate matching min_theta
-    let idx = face
-        .iter()
-        .enumerate()
-        .filter_map(|(i, theta)| {
-            if theta.rho == min_theta {
-                Some(i)
-            } else {
-                None
-            }
-        })
-        .next()
-        .unwrap();
+    let mut slicer = PolygonSlicer::new(face);
 
-    let mut theta0 = min_theta;
-    let mut beta = idx;
-    let mut alpha = (idx + 1) % face.len();
-    println!("rho {}; theta0 {}", face[alpha].rho, theta0);
-    if face[alpha].rho > theta0 {
-        (alpha, beta) = (beta, (idx + face.len() - 1) % face.len());
-        println!("rho {}; theta0 {}", face[beta].rho, theta0);
-        if face[beta].rho > theta0 {
-            beta = alpha;
-        }
-    }
-    println!("theta0 = {}", theta0);
-    println!("alpha {}; beta {:?}", alpha, beta);
-
+    let mut i = 0;
     loop {
-        let gamma = (alpha + 1) % face.len();
-        let delta = (beta + face.len() - 1) % (face.len());
-
-        println!("gamma {}; delta {}", gamma, delta);
-
-        let theta3 = face[delta].rho.min(face[gamma].rho);
-        let count = ((theta3 - theta0) / theta_resolution).ceil() as i32;
-        println!("theta3 {}; count {}", theta3, count);
-
-        for i in 0..count {
-            let theta1 = theta0 + (theta3 - theta0) * i as f32 / count as f32;
-            let theta2 = theta0 + (theta3 - theta0) * (1 + i) as f32 / count as f32;
-            println!("theta1 {}; theta2 {}", theta1, theta2);
-            let v1 = project(&face[alpha], &face[gamma], theta1);
-            let v3 = project(&face[alpha], &face[gamma], theta2);
-            let v4 = project(&face[beta], &face[delta], theta2);
-
-            let degenerate_start = alpha == beta && theta1 <= face[alpha].rho;
-            let left = if degenerate_start {
-                vec![v1]
-            } else {
-                let v2 = project(&face[beta], &face[delta], theta1);
-                println!(
-                    "v2 {:?} = project({:?}, {:?}, {})",
-                    &v2, &face[beta], &face[delta], theta1
-                );
-                vec![v2, v1]
-            };
-
-            let right = if gamma == delta && theta2 >= face[gamma].rho {
-                vec![v3]
-            } else {
-                vec![v3, v4]
-            };
-            println!("{:?} {:?}", &left, &right);
-
-            let mut face = left;
-            face.extend(right);
-
-            println!("{:?}", face);
-
-            rval.push(face);
-        }
-
-        theta0 = theta3;
-
-        println!(
-            "theta0 {}; gamma.rho {}; delta.rho {}",
-            theta0, face[gamma].rho, face[delta].rho
-        );
-
-        if theta0 >= face[gamma].rho {
-            alpha = gamma;
-        }
-        if theta0 >= face[delta].rho {
-            beta = delta;
-        }
-
-        println!("theta0 = {}", theta0);
-        println!("alpha {}; beta {:?}", alpha, beta);
-
-        if beta == alpha || beta == (alpha + 1) % face.len() {
+        let q = (slicer.min_theta / theta_resolution).floor() + i as f32;
+        let theta1 = if i == 0 {
+            slicer.min_theta
+        } else {
+            q * theta_resolution
+        };
+        if theta1 >= slicer.max_theta {
             break;
         }
-        // if (gamma + 1) % face.len() == delta {
-        //     break;
-        // }
+        let theta2 = (q + 1.0) * theta_resolution;
+        println!("theta1 {}; theta2 {}", theta1, theta2);
+
+        rval.extend(slicer.slice(theta1, theta2));
+        i += 1;
     }
 
     rval
 }
+
+//
+
+enum VertexOvershoot {
+    None,
+    Gamma,
+    Delta,
+}
+
+pub struct PolygonSlicer<'a> {
+    pub face: &'a [CylindricalCoodinate],
+    pub alpha: usize,
+    pub beta: usize,
+    pub min_theta: f32,
+    pub max_theta: f32,
+}
+
+impl<'a> PolygonSlicer<'a> {
+    fn new(face: &'a [CylindricalCoodinate]) -> Self {
+        let (min_theta, max_theta) = {
+            let raw_thetas = face.iter().map(|cc| cc.rho);
+            let thetas = sorted_set(raw_thetas);
+            (thetas[0], *thetas.last().unwrap())
+        };
+
+        // find an idx of a coordinate matching min_theta
+        let idx = face
+            .iter()
+            .enumerate()
+            .filter_map(|(i, theta)| {
+                if theta.rho == min_theta {
+                    Some(i)
+                } else {
+                    None
+                }
+            })
+            .next()
+            .unwrap();
+
+        let theta0 = min_theta;
+        let mut beta = idx;
+        let mut alpha = (idx + 1) % face.len();
+        println!("rho {}; theta0 {}", face[alpha].rho, theta0);
+        if face[alpha].rho > theta0 {
+            (alpha, beta) = (beta, (idx + face.len() - 1) % face.len());
+            println!("rho {}; theta0 {}", face[beta].rho, theta0);
+            if face[beta].rho > theta0 {
+                beta = alpha;
+            }
+        }
+        println!("theta0 = {}", theta0);
+        println!("alpha {}; beta {:?}", alpha, beta);
+
+        PolygonSlicer {
+            face,
+            alpha,
+            beta,
+            min_theta,
+            max_theta,
+        }
+    }
+
+    pub fn slice(&mut self, theta1: f32, theta2: f32) -> Vec<Vec<CylindricalCoodinate>> {
+        let mut rval = vec![];
+
+        let mut gamma = (self.alpha + 1) % self.face.len();
+        let mut delta = (self.beta + self.face.len() - 1) % (self.face.len());
+
+        let mut v1 = project(&self.face[self.alpha], &self.face[gamma], theta1);
+        let mut v2 = project(&self.face[self.beta], &self.face[delta], theta1);
+        let mut v3 = project(&self.face[self.alpha], &self.face[gamma], theta2);
+        let mut v4 = project(&self.face[self.beta], &self.face[delta], theta2);
+
+        for _ in 0..100 {
+            let degenerate_start = v1 == v2;
+
+            let vertex_overshoot = if gamma == delta || self.face[gamma].rho == self.face[delta].rho
+            {
+                VertexOvershoot::None
+            } else if self.face[gamma].rho < theta2 {
+                if self.face[delta].rho < theta2 {
+                    if self.face[gamma].rho < self.face[delta].rho {
+                        VertexOvershoot::Gamma
+                    } else {
+                        VertexOvershoot::Delta
+                    }
+                } else {
+                    VertexOvershoot::Gamma
+                }
+            } else if self.face[delta].rho < theta2 {
+                VertexOvershoot::Delta
+            } else {
+                VertexOvershoot::None
+            };
+
+            match vertex_overshoot {
+                VertexOvershoot::Gamma => {
+                    let mut new_face = vec![];
+                    if !degenerate_start {
+                        new_face.push(v2);
+                    }
+                    new_face.extend([v1, self.face[gamma], v4]);
+                    rval.push(new_face);
+
+                    self.alpha = gamma;
+                    gamma = (self.alpha + 1) % self.face.len();
+                    v1 = self.face[self.alpha];
+                    v2 = v4;
+                    v3 = project(&self.face[self.alpha], &self.face[gamma], theta2);
+                    println!(
+                        "vertex overshoot gamma; alpha :={}; gamma :={}",
+                        self.alpha, gamma
+                    );
+                }
+                VertexOvershoot::Delta => {
+                    let mut new_face = vec![];
+                    if !degenerate_start {
+                        new_face.push(v2);
+                    }
+                    new_face.extend([v1, v3, self.face[delta]]);
+                    rval.push(new_face);
+
+                    self.beta = delta;
+                    delta = (self.beta + self.face.len() - 1) % (self.face.len());
+                    v2 = self.face[self.beta];
+                    v1 = v3;
+                    v4 = project(&self.face[self.beta], &self.face[delta], theta2);
+                    println!(
+                        "vertex overshoot delta; beta :={}; delta :={}",
+                        self.beta, delta
+                    );
+                }
+                VertexOvershoot::None => break,
+            }
+        }
+
+        let degenerate_start = v1 == v2;
+
+        let mut face = if degenerate_start {
+            vec![v1]
+        } else {
+            println!(
+                "v2 {:?} = project({:?}, {:?}, {})",
+                &v2, &self.face[self.beta], &self.face[delta], theta1
+            );
+            vec![v2, v1]
+        };
+
+        if v3 != v1 {
+            face.push(v3);
+        }
+        if v4 != v2 && v4 != v3 {
+            face.push(v4);
+        }
+
+        if face.len() > 2 {
+            rval.push(face);
+        } else {
+            println!("degenerate polygon {:#?}", face);
+        }
+
+        println!(
+            "theta2 {}; gamma.rho {}; delta.rho {}",
+            theta2, self.face[gamma].rho, self.face[delta].rho
+        );
+
+        if theta2 >= self.face[gamma].rho {
+            self.alpha = gamma;
+        }
+        if theta2 >= self.face[delta].rho {
+            self.beta = delta;
+        }
+
+        println!("theta2 = {}", theta2);
+        println!("alpha {}; beta {:?}", self.alpha, self.beta);
+
+        rval
+    }
+}
+
+//
 
 fn project(a: &CylindricalCoodinate, b: &CylindricalCoodinate, rho: f32) -> CylindricalCoodinate {
     let t = (rho - a.rho) / (b.rho - a.rho);
@@ -403,7 +525,8 @@ where
         let edge = self;
         let xy0 = edge.0.coords_2d();
         let v0 = with_r(xy0, 0.0);
-        let xy1 = edge.1.coords_2d();
+        let mut xy1 = edge.1.coords_2d();
+        space.maybe_wrap(&mut xy1, &xy0);
         let v1 = with_r(xy1, 0.0);
 
         let xy2 = edge.coord_left(space);
@@ -423,27 +546,41 @@ where
         let xy7 = space.lerp(&xy1, frac, &xy3);
         let v7 = with_r(xy7, delta_r);
 
-        let v0 = space.to_blender(v0);
-        let v1 = space.to_blender(v1);
-        let v2 = space.to_blender(v2);
-        let v3 = space.to_blender(v3);
-        let v4 = space.to_blender(v4);
-        let v5 = space.to_blender(v5);
-        let v6 = space.to_blender(v6);
-        let v7 = space.to_blender(v7);
+        if true {
+            let faces = subdivide_faces(
+                vec![
+                    [v0, v1, v6, v4].as_slice(),
+                    &[v4, v6, v2],
+                    &[v0, v5, v7, v1],
+                    &[v7, v5, v3],
+                ],
+                0.25,
+            );
 
-        vec![
-            vec![v0, v1, v6, v4],
-            vec![v4, v6, v2],
-            vec![v0, v5, v7, v1],
-            vec![v7, v5, v3],
-        ]
+            multi_face_to_blender(space, faces)
+        } else {
+            let v0 = space.to_blender(v0);
+            let v1 = space.to_blender(v1);
+            let v2 = space.to_blender(v2);
+            let v3 = space.to_blender(v3);
+            let v4 = space.to_blender(v4);
+            let v5 = space.to_blender(v5);
+            let v6 = space.to_blender(v6);
+            let v7 = space.to_blender(v7);
+
+            vec![
+                vec![v0, v1, v6, v4],
+                vec![v4, v6, v2],
+                vec![v0, v5, v7, v1],
+                vec![v7, v5, v3],
+            ]
+        }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::walls::{sorted_set, subdivide_face, subdivide_faces};
+    use crate::walls::{sorted_set, subdivide_face, subdivide_faces, PolygonSlicer};
     use crate::CylindricalCoodinate;
     use approx::assert_abs_diff_eq;
 
@@ -696,5 +833,39 @@ mod test {
         for face in faces {
             assert!(face.len() > 2)
         }
+    }
+
+    #[test]
+    pub fn test_subdivide_6() {
+        let face_pre = [
+            CylindricalCoodinate::new(0.0, 0.0, 0.75),
+            CylindricalCoodinate::new(0.0, 0.0, 0.0),
+            CylindricalCoodinate::new(3.0, 0.75, 0.0),
+        ];
+        let faces = subdivide_face(&face_pre, 2.0);
+
+        assert_eq!(2, faces.len());
+
+        assert_eq!(4, faces[0].len());
+        assert_abs_diff_eq!(faces[0][0], CylindricalCoodinate::new(0.0, 0.0, 0.75),);
+        assert_abs_diff_eq!(faces[0][1], CylindricalCoodinate::new(0.0, 0.0, 0.0),);
+        assert_abs_diff_eq!(faces[0][2], CylindricalCoodinate::new(2.0, 0.50, 0.0),);
+        assert_abs_diff_eq!(faces[0][3], CylindricalCoodinate::new(2.0, 0.50, 0.25),);
+
+        assert_eq!(3, faces[1].len());
+    }
+
+    #[test]
+    pub fn test_slice_1() {
+        let face_pre = [
+            CylindricalCoodinate::new(0.0, 0.0, 0.75),
+            CylindricalCoodinate::new(0.0, 0.0, 0.0),
+            CylindricalCoodinate::new(3.0, 0.75, 0.0),
+        ];
+        let mut slicer = PolygonSlicer::new(&face_pre);
+
+        let faces = slicer.slice(2.0, 4.0);
+        assert_eq!(1, faces.len());
+        assert_eq!(3, faces[0].len());
     }
 }

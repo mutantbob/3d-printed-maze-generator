@@ -129,6 +129,7 @@ pub fn draw_square_maze(fname: &str) -> Result<(), std::io::Error> {
         r0: 15.0 - groove_depth,
         max_rho,
     };
+
     write_blender_python(
         "/tmp/geom-sq.py",
         edges.as_slice(),

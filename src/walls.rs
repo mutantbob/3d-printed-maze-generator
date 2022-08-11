@@ -183,7 +183,7 @@ where
             let face2 = [v5, v3, v2, v4];
             let faces = [face1.as_slice(), face2.as_slice()];
 
-            println!("debug wall polygons; subdivide {:?}", faces);
+            //println!("debug wall polygons; subdivide {:?}", faces);
 
             let faces = subdivide_faces(faces, 0.25);
 
@@ -296,7 +296,7 @@ fn subdivide_face(
             break;
         }
         let theta2 = (q + 1.0) * theta_resolution;
-        println!("theta1 {}; theta2 {}", theta1, theta2);
+        // println!("theta1 {}; theta2 {}", theta1, theta2);
 
         rval.extend(slicer.slice(theta1, theta2));
         i += 1;
@@ -346,16 +346,16 @@ impl<'a> PolygonSlicer<'a> {
         let theta0 = min_theta;
         let mut beta = idx;
         let mut alpha = (idx + 1) % face.len();
-        println!("rho {}; theta0 {}", face[alpha].rho, theta0);
+        // println!("rho {}; theta0 {}", face[alpha].rho, theta0);
         if face[alpha].rho > theta0 {
             (alpha, beta) = (beta, (idx + face.len() - 1) % face.len());
-            println!("rho {}; theta0 {}", face[beta].rho, theta0);
+            // println!("rho {}; theta0 {}", face[beta].rho, theta0);
             if face[beta].rho > theta0 {
                 beta = alpha;
             }
         }
-        println!("theta0 = {}", theta0);
-        println!("alpha {}; beta {:?}", alpha, beta);
+        // println!("theta0 = {}", theta0);
+        // println!("alpha {}; beta {:?}", alpha, beta);
 
         PolygonSlicer {
             face,
@@ -413,10 +413,10 @@ impl<'a> PolygonSlicer<'a> {
                     v1 = self.face[self.alpha];
                     v2 = v4;
                     v3 = project(&self.face[self.alpha], &self.face[gamma], theta2);
-                    println!(
+                    /*println!(
                         "vertex overshoot gamma; alpha :={}; gamma :={}",
                         self.alpha, gamma
-                    );
+                    );*/
                 }
                 VertexOvershoot::Delta => {
                     let mut new_face = vec![];
@@ -431,12 +431,15 @@ impl<'a> PolygonSlicer<'a> {
                     v2 = self.face[self.beta];
                     v1 = v3;
                     v4 = project(&self.face[self.beta], &self.face[delta], theta2);
-                    println!(
+                    /* println!(
                         "vertex overshoot delta; beta :={}; delta :={}",
                         self.beta, delta
-                    );
+                    );*/
                 }
-                VertexOvershoot::None => break,
+                VertexOvershoot::None => {
+                    // println!("no overshoot");
+                    break;
+                }
             }
         }
 
@@ -445,14 +448,10 @@ impl<'a> PolygonSlicer<'a> {
         let mut face = if degenerate_start {
             vec![v1]
         } else {
-            println!(
-                "v2 {:?} = project({:?}, {:?}, {})",
-                &v2, &self.face[self.beta], &self.face[delta], theta1
-            );
             vec![v2, v1]
         };
 
-        if v3 != v1 {
+        if v3 != v1 && v3 != v2 {
             face.push(v3);
         }
         if v4 != v2 && v4 != v3 {
@@ -461,14 +460,12 @@ impl<'a> PolygonSlicer<'a> {
 
         if face.len() > 2 {
             rval.push(face);
-        } else {
-            println!("degenerate polygon {:#?}", face);
         }
 
-        println!(
+        /* println!(
             "theta2 {}; gamma.rho {}; delta.rho {}",
             theta2, self.face[gamma].rho, self.face[delta].rho
-        );
+        );*/
 
         if theta2 >= self.face[gamma].rho {
             self.alpha = gamma;
@@ -477,17 +474,27 @@ impl<'a> PolygonSlicer<'a> {
             self.beta = delta;
         }
 
-        println!("theta2 = {}", theta2);
-        println!("alpha {}; beta {:?}", self.alpha, self.beta);
+        // println!("theta2 = {}", theta2);
+        // println!("alpha {}; beta {:?}", self.alpha, self.beta);
+
+        for face in &rval {
+            if degenerate_face(face) {
+                panic!("degenerate polygon\n{:?}\nfrom\n{:#?}", face, self.face);
+            }
+        }
 
         rval
     }
 }
 
+fn degenerate_face(face: &[CylindricalCoodinate]) -> bool {
+    face.len() > 2 && face[0] == *face.last().unwrap()
+}
 //
 
 fn project(a: &CylindricalCoodinate, b: &CylindricalCoodinate, rho: f32) -> CylindricalCoodinate {
     let t = (rho - a.rho) / (b.rho - a.rho);
+    let t = t.clamp(0.0, 1.0);
     let rho = lerp(a.rho, t, b.rho);
     let r = lerp(a.r, t, b.r);
     let z = lerp(a.z, t, b.z);
@@ -867,5 +874,33 @@ mod test {
         let faces = slicer.slice(2.0, 4.0);
         assert_eq!(1, faces.len());
         assert_eq!(3, faces[0].len());
+    }
+
+    #[test]
+    pub fn test_subdivide_7() {
+        let face_pre = [
+            CylindricalCoodinate {
+                rho: 0.375,
+                r: 2.0,
+                z: 2.375,
+            },
+            CylindricalCoodinate {
+                rho: 0.5,
+                r: 2.0,
+                z: 2.5,
+            },
+            CylindricalCoodinate {
+                rho: -0.5,
+                r: 2.0,
+                z: 2.5,
+            },
+            CylindricalCoodinate {
+                rho: -0.375,
+                r: 2.0,
+                z: 2.375,
+            },
+        ];
+
+        let _faces = subdivide_face(&face_pre, 0.25);
     }
 }

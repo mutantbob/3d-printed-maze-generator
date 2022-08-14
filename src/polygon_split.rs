@@ -57,8 +57,18 @@ pub struct PolygonSlicer<'a> {
     pub max_theta: f32,
 }
 
+macro_rules! slice_debug {
+    ($fmt:expr) => {{
+        // println!($fmt)
+    }};
+    ($fmt:expr, $($args:tt)*) => {{
+        // println!($fmt, $($args)*)
+    }};
+}
+
 impl<'a> PolygonSlicer<'a> {
     fn new(face: &'a [CylindricalCoodinate]) -> Self {
+        // format_args!()
         let (min_theta, max_theta) = {
             let raw_thetas = face.iter().map(|cc| cc.rho);
             let thetas = sorted_set(raw_thetas);
@@ -82,16 +92,16 @@ impl<'a> PolygonSlicer<'a> {
         let theta0 = min_theta;
         let mut beta = idx;
         let mut alpha = (idx + 1) % face.len();
-        // println!("rho {}; theta0 {}", face[alpha].rho, theta0);
+        slice_debug!("rho {}; theta0 {}", face[alpha].rho, theta0);
         if face[alpha].rho > theta0 {
             (alpha, beta) = (beta, (idx + face.len() - 1) % face.len());
-            // println!("rho {}; theta0 {}", face[beta].rho, theta0);
+            // slice_debug!("rho {}; theta0 {}", face[beta].rho, theta0);
             if face[beta].rho > theta0 {
                 beta = alpha;
             }
         }
-        // println!("theta0 = {}", theta0);
-        // println!("alpha {}; beta {:?}", alpha, beta);
+        slice_debug!("theta0 = {}", theta0);
+        slice_debug!("alpha {}; beta {:?}", alpha, beta);
 
         PolygonSlicer {
             face,
@@ -103,10 +113,13 @@ impl<'a> PolygonSlicer<'a> {
     }
 
     pub fn slice(&mut self, theta1: f32, theta2: f32) -> Vec<Vec<CylindricalCoodinate>> {
+        slice_debug!("slice( , {}, {})", theta1, theta2);
+
         let mut rval = vec![];
 
         let mut gamma = (self.alpha + 1) % self.face.len();
         let mut delta = (self.beta + self.face.len() - 1) % (self.face.len());
+        slice_debug!("gamma={}; delta={}", gamma, delta);
 
         let mut v1 = project(&self.face[self.alpha], &self.face[gamma], theta1);
         let mut v2 = project(&self.face[self.beta], &self.face[delta], theta1);
@@ -142,6 +155,9 @@ impl<'a> PolygonSlicer<'a> {
                         new_face.push(v2);
                     }
                     new_face.extend([v1, self.face[gamma], v4]);
+                    if degenerate_face(&new_face) {
+                        slice_debug!("gamma overshoot degenerate face");
+                    }
                     rval.push(new_face);
 
                     self.alpha = gamma;
@@ -149,17 +165,24 @@ impl<'a> PolygonSlicer<'a> {
                     v1 = self.face[self.alpha];
                     v2 = v4;
                     v3 = project(&self.face[self.alpha], &self.face[gamma], theta2);
-                    /*println!(
+                    slice_debug!(
                         "vertex overshoot gamma; alpha :={}; gamma :={}",
-                        self.alpha, gamma
-                    );*/
+                        self.alpha,
+                        gamma
+                    );
                 }
                 VertexOvershoot::Delta => {
                     let mut new_face = vec![];
                     if !degenerate_start {
                         new_face.push(v2);
                     }
-                    new_face.extend([v1, v3, self.face[delta]]);
+                    new_face.extend([v1, v3]);
+                    if self.face[delta] != v2 {
+                        new_face.push(self.face[delta])
+                    }
+                    if degenerate_face(&new_face) {
+                        slice_debug!("delta overshoot degenerate face\nv2={:?}\nv1={:?}\nv3={:?}\nv_delta={:?}", v2, v1, v3, &self.face[delta]);
+                    }
                     rval.push(new_face);
 
                     self.beta = delta;
@@ -167,13 +190,14 @@ impl<'a> PolygonSlicer<'a> {
                     v2 = self.face[self.beta];
                     v1 = v3;
                     v4 = project(&self.face[self.beta], &self.face[delta], theta2);
-                    /* println!(
+                    slice_debug!(
                         "vertex overshoot delta; beta :={}; delta :={}",
-                        self.beta, delta
-                    );*/
+                        self.beta,
+                        delta
+                    );
                 }
                 VertexOvershoot::None => {
-                    // println!("no overshoot");
+                    slice_debug!("no overshoot");
                     break;
                 }
             }
@@ -190,18 +214,23 @@ impl<'a> PolygonSlicer<'a> {
         if v3 != v1 && v3 != v2 {
             face.push(v3);
         }
-        if v4 != v2 && v4 != v3 {
+        if v4 != v2 && v4 != v3 && v4 != v1 {
             face.push(v4);
         }
 
         if face.len() > 2 {
+            if degenerate_face(&face) {
+                slice_debug!("degenerate face");
+            }
             rval.push(face);
         }
 
-        /* println!(
+        slice_debug!(
             "theta2 {}; gamma.rho {}; delta.rho {}",
-            theta2, self.face[gamma].rho, self.face[delta].rho
-        );*/
+            theta2,
+            self.face[gamma].rho,
+            self.face[delta].rho
+        );
 
         if theta2 >= self.face[gamma].rho {
             self.alpha = gamma;
@@ -210,8 +239,8 @@ impl<'a> PolygonSlicer<'a> {
             self.beta = delta;
         }
 
-        // println!("theta2 = {}", theta2);
-        // println!("alpha {}; beta {:?}", self.alpha, self.beta);
+        slice_debug!("theta2 = {}", theta2);
+        slice_debug!("alpha {}; beta {:?}", self.alpha, self.beta);
 
         for face in &rval {
             if degenerate_face(face) {
@@ -577,5 +606,33 @@ mod test {
         ];
 
         let _faces = subdivide_face(&face_pre, 0.25);
+    }
+
+    #[test]
+    pub fn test_subdivide_8() {
+        let face_raw = vec![
+            CylindricalCoodinate {
+                rho: 0.33333334,
+                r: 2.0,
+                z: 3.4641016,
+            },
+            CylindricalCoodinate {
+                rho: 0.16666666,
+                r: 2.0,
+                z: 3.1754265,
+            },
+            CylindricalCoodinate {
+                rho: 0.3333333,
+                r: 2.0,
+                z: 2.8867514,
+            },
+            CylindricalCoodinate {
+                rho: 0.6666667,
+                r: 2.0,
+                z: 3.4641016,
+            },
+        ];
+
+        subdivide_face(face_raw.as_slice(), 0.25);
     }
 }

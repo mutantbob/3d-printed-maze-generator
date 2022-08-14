@@ -50,14 +50,15 @@ where
 pub fn add_edge_flat<CA, SPACE>(
     blender: &mut BlenderGeometry,
     edge: &Edge<CA>,
-    delta_r: f32,
     space: &SPACE,
+    radius_high: f32,
+    radius_groove: f32,
 ) where
     CA: CellAddress,
     SPACE: Space<(f32, f32)> + BlenderMapping<CylindricalCoodinate>,
     Edge<CA>: EdgeCornerMapping<CA> + CorridorPolygons<SPACE>,
 {
-    for face in edge.calculate_path_polygons(delta_r, space) {
+    for face in edge.calculate_path_polygons(space, radius_high, radius_groove) {
         blender.add_face(face.as_slice());
     }
 }
@@ -65,14 +66,15 @@ pub fn add_edge_flat<CA, SPACE>(
 pub fn add_wall<CA: CellAddress, SPACE: Space<(f32, f32)> + BlenderMapping<CylindricalCoodinate>>(
     blender: &mut BlenderGeometry,
     wall: &MazeWall<CA>,
-    delta_r: f32,
     space: &SPACE,
+    radius_high: f32,
+    radius_groove: f32,
 ) where
     Edge<CA>: EdgeCornerMapping<CA>,
     MazeWall<CA>: WallPolygons<SPACE>,
     SPACE: Space<(f32, f32)> + BlenderMapping<CylindricalCoodinate>,
 {
-    for face in wall.calculate_wall_polygons(delta_r, space) {
+    for face in wall.calculate_wall_polygons(space, radius_high, radius_groove) {
         blender.add_face(face.as_slice());
     }
 }
@@ -83,48 +85,58 @@ pub trait WallPolygons<SPACE>
 where
     SPACE: Space<(f32, f32)> + BlenderMapping<CylindricalCoodinate>,
 {
-    fn calculate_wall_polygons(&self, delta_r: f32, space: &SPACE) -> Vec<Vec<Point3D>>;
+    fn calculate_wall_polygons(
+        &self,
+        space: &SPACE,
+        radius_high: f32,
+        radius_groove: f32,
+    ) -> Vec<Vec<Point3D>>;
 }
 
 impl<SPACE> WallPolygons<SPACE> for MazeWall<HexCellAddress>
 where
     SPACE: Space<(f32, f32)> + BlenderMapping<CylindricalCoodinate>,
 {
-    fn calculate_wall_polygons(&self, delta_r: f32, space: &SPACE) -> Vec<Vec<Point3D>> {
+    fn calculate_wall_polygons(
+        &self,
+        space: &SPACE,
+        radius_high: f32,
+        radius_groove: f32,
+    ) -> Vec<Vec<Point3D>> {
         let wall = self;
 
         let xy0 = wall.a.coords_2d();
-        let v0 = with_r(xy0, 0.0);
+        let v0 = with_r(xy0, radius_groove);
         let xy2 = wall.coord_left(space);
-        let v2 = with_r(xy2, delta_r);
+        let v2 = with_r(xy2, radius_high);
         let xy3 = wall.coord_right(space);
-        let v3 = with_r(xy3, delta_r);
+        let v3 = with_r(xy3, radius_high);
 
         let faces = if wall.wall_all {
-            let v0 = with_r(xy0, delta_r);
+            let v0 = with_r(xy0, radius_high);
 
             vec![vec![v0, v3, v2]]
         } else {
             match (wall.wall_ccw, wall.wall_cw) {
                 (false, false) => {
                     let xy8 = space.midpoint3(xy0, xy2, xy3);
-                    let v8 = with_r(xy8, delta_r);
+                    let v8 = with_r(xy8, radius_high);
 
                     vec![vec![v0, v3, v8], vec![v3, v2, v8], vec![v2, v0, v8]]
                 }
                 (true, false) => {
-                    let v4 = with_r(space.midpoint(xy0, xy2), delta_r);
+                    let v4 = with_r(space.midpoint(xy0, xy2), radius_high);
 
                     vec![vec![v0, v3, v4], vec![v4, v3, v2]]
                 }
                 (false, true) => {
-                    let v5 = with_r(space.midpoint(xy0, xy3), delta_r);
+                    let v5 = with_r(space.midpoint(xy0, xy3), radius_high);
 
                     vec![vec![v0, v5, v2], vec![v5, v3, v2]]
                 }
                 (true, true) => {
-                    let v4 = with_r(space.midpoint(xy0, xy2), delta_r);
-                    let v5 = with_r(space.midpoint(xy0, xy3), delta_r);
+                    let v4 = with_r(space.midpoint(xy0, xy2), radius_high);
+                    let v5 = with_r(space.midpoint(xy0, xy3), radius_high);
 
                     vec![vec![v0, v5, v4], vec![v4, v5, v3, v2]]
                 }
@@ -141,21 +153,33 @@ impl<SPACE> WallPolygons<SPACE> for MazeWall<SqCellAddress>
 where
     SPACE: Space<(f32, f32)> + BlenderMapping<CylindricalCoodinate>,
 {
-    fn calculate_wall_polygons(&self, delta_r: f32, space: &SPACE) -> Vec<Vec<Point3D>> {
+    fn calculate_wall_polygons(
+        &self,
+        space: &SPACE,
+        radius_high: f32,
+        radius_groove: f32,
+    ) -> Vec<Vec<Point3D>> {
         let wall = self;
 
         let xy0 = wall.a.coords_2d();
-        let v0 = with_r(xy0, if wall.wall_all { delta_r } else { 0.0 });
+        let v0 = with_r(
+            xy0,
+            if wall.wall_all {
+                radius_high
+            } else {
+                radius_groove
+            },
+        );
         let xy2 = wall.coord_left(space);
-        let v2 = with_r(xy2, delta_r);
+        let v2 = with_r(xy2, radius_high);
         let xy3 = wall.coord_right(space);
-        let v3 = with_r(xy3, delta_r);
+        let v3 = with_r(xy3, radius_high);
 
         let frac = 0.75;
         let xy4 = space.lerp(&xy0, frac, &xy2);
-        let v4 = with_r(xy4, delta_r);
+        let v4 = with_r(xy4, radius_high);
         let xy5 = space.lerp(&xy0, frac, &xy3);
-        let v5 = with_r(xy5, delta_r);
+        let v5 = with_r(xy5, radius_high);
 
         let face1 = [v0, v5, v4];
         let face2 = [v5, v3, v2, v4];
@@ -199,26 +223,36 @@ pub trait CorridorPolygons<SPACE>
 where
     SPACE: Space<(f32, f32)> + BlenderMapping<CylindricalCoodinate>,
 {
-    fn calculate_path_polygons(&self, delta_r: f32, space: &SPACE) -> Vec<Vec<Point3D>>;
+    fn calculate_path_polygons(
+        &self,
+        space: &SPACE,
+        radius_high: f32,
+        radius_groove: f32,
+    ) -> Vec<Vec<Point3D>>;
 }
 
 impl<SPACE> CorridorPolygons<SPACE> for Edge<HexCellAddress>
 where
     SPACE: Space<(f32, f32)> + BlenderMapping<CylindricalCoodinate>,
 {
-    fn calculate_path_polygons(&self, delta_r: f32, space: &SPACE) -> Vec<Vec<Point3D>> {
+    fn calculate_path_polygons(
+        &self,
+        space: &SPACE,
+        radius_high: f32,
+        radius_groove: f32,
+    ) -> Vec<Vec<Point3D>> {
         let edge = self;
         let tz0 = edge.0.coords_2d();
         let mut tz1 = edge.1.coords_2d();
         space.maybe_wrap(&mut tz1, &tz0);
-        let tzr0 = with_r(tz0, 0.0);
+        let tzr0 = with_r(tz0, radius_groove);
         // let v0 = space.to_blender(tzr0);
-        let tzr1 = with_r(tz1, 0.0);
+        let tzr1 = with_r(tz1, radius_groove);
         // let v1 = space.to_blender(tzr1);
 
-        let tzr2 = with_r(edge.coord_left(space), delta_r);
+        let tzr2 = with_r(edge.coord_left(space), radius_high);
         // let v2 = space.to_blender(tzr2);
-        let tzr3 = with_r(edge.coord_right(space), delta_r);
+        let tzr3 = with_r(edge.coord_right(space), radius_high);
         // let v3 = space.to_blender(tzr3);
 
         let face1 = [tzr0, tzr1, tzr2];
@@ -235,30 +269,35 @@ impl<SPACE> CorridorPolygons<SPACE> for Edge<SqCellAddress>
 where
     SPACE: Space<(f32, f32)> + BlenderMapping<CylindricalCoodinate>,
 {
-    fn calculate_path_polygons(&self, delta_r: f32, space: &SPACE) -> Vec<Vec<Point3D>> {
+    fn calculate_path_polygons(
+        &self,
+        space: &SPACE,
+        radius_high: f32,
+        radius_groove: f32,
+    ) -> Vec<Vec<Point3D>> {
         let edge = self;
         let xy0 = edge.0.coords_2d();
-        let v0 = with_r(xy0, 0.0);
+        let v0 = with_r(xy0, radius_groove);
         let mut xy1 = edge.1.coords_2d();
         space.maybe_wrap(&mut xy1, &xy0);
-        let v1 = with_r(xy1, 0.0);
+        let v1 = with_r(xy1, radius_groove);
 
         let xy2 = edge.coord_left(space);
-        let v2 = with_r(xy2, delta_r);
+        let v2 = with_r(xy2, radius_high);
         let xy3 = edge.coord_right(space);
-        let v3 = with_r(xy3, delta_r);
+        let v3 = with_r(xy3, radius_high);
 
         let frac = 0.75;
 
         let xy4 = space.lerp(&xy0, frac, &xy2);
-        let v4 = with_r(xy4, delta_r);
+        let v4 = with_r(xy4, radius_high);
         let xy5 = space.lerp(&xy0, frac, &xy3);
-        let v5 = with_r(xy5, delta_r);
+        let v5 = with_r(xy5, radius_high);
 
         let xy6 = space.lerp(&xy1, frac, &xy2);
-        let v6 = with_r(xy6, delta_r);
+        let v6 = with_r(xy6, radius_high);
         let xy7 = space.lerp(&xy1, frac, &xy3);
-        let v7 = with_r(xy7, delta_r);
+        let v7 = with_r(xy7, radius_high);
 
         let faces = subdivide_faces(
             vec![

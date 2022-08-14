@@ -46,6 +46,15 @@ fn main() {
     }
 }
 
+pub struct MazeDimensions {
+    /// the inner void where you hide the prize
+    inner_radius: f32,
+    /// the groove of the maze path
+    groove_radius: f32,
+    /// the main radius of the maze cylinder
+    maze_outer_radius: f32,
+}
+
 pub fn draw_hex_maze(fname: &str) -> Result<(), std::io::Error> {
     let generator = maze::MazeGenerator::new();
     let topology1 = HexMazeTopology::new(14, 14);
@@ -79,9 +88,16 @@ pub fn draw_hex_maze(fname: &str) -> Result<(), std::io::Error> {
     println!("{} edges; {} walls", edges.len(), walls.len());
 
     let max_rho = topology1.maximum_x();
-    let groove_depth = 2.0;
+    let shell_r = 10.0;
+    let groove_r = 8.0;
+
+    let maze_dimensions = MazeDimensions {
+        inner_radius: 7.5,
+        groove_radius: groove_r,
+        maze_outer_radius: shell_r,
+    };
     let cylindrical = CylindricalSpace {
-        r0: 10.0 - groove_depth,
+        r0: maze_dimensions.groove_radius,
         max_rho,
     };
     write_blender_python(
@@ -89,9 +105,9 @@ pub fn draw_hex_maze(fname: &str) -> Result<(), std::io::Error> {
         &edges,
         &walls,
         &cylindrical,
-        groove_depth,
         -3.0,
         topology1.maximum_y() + 2.5,
+        &maze_dimensions,
     )?;
 
     Ok(())
@@ -125,9 +141,15 @@ pub fn draw_square_maze(fname: &str) -> Result<(), std::io::Error> {
     println!("{} edges; {} walls", edges.len(), walls.len());
 
     let max_rho = topology.maximum_x();
-    let groove_depth = 2.0;
+
+    let maze_dimensions = MazeDimensions {
+        inner_radius: 13.0,
+        groove_radius: 14.0,
+        maze_outer_radius: 16.0,
+    };
+
     let cylindrical = CylindricalSpace {
-        r0: 16.0 - groove_depth,
+        r0: maze_dimensions.groove_radius,
         max_rho,
     };
 
@@ -136,9 +158,9 @@ pub fn draw_square_maze(fname: &str) -> Result<(), std::io::Error> {
         edges.as_slice(),
         &walls,
         &cylindrical,
-        groove_depth,
         -2.1,
         topology.maximum_y() + 2.5,
+        &maze_dimensions,
     )?;
 
     Ok(())
@@ -149,9 +171,9 @@ pub fn write_blender_python<CA: CellAddress>(
     edges: &[Edge<CA>],
     walls: &[MazeWall<CA>],
     cylindrical: &CylindricalSpace,
-    groove_depth: f32,
     prescale_bottom_z: f32,
     prescale_top_z: f32,
+    maze_dimensions: &MazeDimensions,
 ) -> Result<(), std::io::Error>
 where
     Edge<CA>: EdgeCornerMapping<CA> + CorridorPolygons<CylindricalSpace>,
@@ -160,10 +182,22 @@ where
     let mut blender = BlenderGeometry::new();
 
     for edge in edges {
-        add_edge_flat(&mut blender, edge, groove_depth, cylindrical);
+        add_edge_flat(
+            &mut blender,
+            edge,
+            cylindrical,
+            maze_dimensions.maze_outer_radius,
+            maze_dimensions.groove_radius,
+        );
     }
     for wall in walls {
-        add_wall(&mut blender, wall, groove_depth, cylindrical);
+        add_wall(
+            &mut blender,
+            wall,
+            cylindrical,
+            maze_dimensions.maze_outer_radius,
+            maze_dimensions.groove_radius,
+        );
     }
 
     if true {

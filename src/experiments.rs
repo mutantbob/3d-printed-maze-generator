@@ -14,11 +14,12 @@ pub fn check_blender_math(fname: &str) -> Result<(), std::io::Error> {
     crate::walls::add_edge_flat(
         &mut blender,
         &edge,
-        1.0,
         &CylindricalSpace {
             r0: 10.0,
             max_rho: 20.0,
         },
+        11.0,
+        10.0,
     );
 
     blender.emit(&mut f)?;

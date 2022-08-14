@@ -136,6 +136,7 @@ where
 //
 
 pub struct CylindricalSpace {
+    // the "baseline" radius that helps us scale z coordinates to be roughly correct
     pub r0: f32,
     pub max_rho: f32,
 }
@@ -209,12 +210,11 @@ impl CylindricalSpace {
 
 impl BlenderMapping<CylindricalCoodinate> for CylindricalSpace {
     fn to_blender(&self, cc: CylindricalCoodinate) -> Point3D {
-        let r0 = self.r0;
         let max_rho = self.max_rho;
 
         let theta = cc.rho / max_rho * TAU;
-        let x = theta.cos() * (cc.r + r0);
-        let y = theta.sin() * (cc.r + r0);
+        let x = theta.cos() * (cc.r);
+        let y = theta.sin() * (cc.r);
 
         let z = self.scale_z(cc.z);
 

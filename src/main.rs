@@ -30,7 +30,7 @@ mod tools;
 mod walls;
 
 fn main() {
-    match 4 {
+    match 2 {
         2 => {
             let _ = draw_hex_maze("/tmp/x.svg");
         }

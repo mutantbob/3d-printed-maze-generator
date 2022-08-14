@@ -100,12 +100,8 @@ where
         let xy3 = wall.coord_right(space);
         let v3 = with_r(xy3, delta_r);
 
-        if wall.wall_all {
+        let faces = if wall.wall_all {
             let v0 = with_r(xy0, delta_r);
-
-            let v0 = space.to_blender(v0);
-            let v2 = space.to_blender(v2);
-            let v3 = space.to_blender(v3);
 
             vec![vec![v0, v3, v2]]
         } else {
@@ -114,30 +110,15 @@ where
                     let xy8 = space.midpoint3(xy0, xy2, xy3);
                     let v8 = with_r(xy8, delta_r);
 
-                    let v0 = space.to_blender(v0);
-                    let v2 = space.to_blender(v2);
-                    let v3 = space.to_blender(v3);
-                    let v8 = space.to_blender(v8);
-
                     vec![vec![v0, v3, v8], vec![v3, v2, v8], vec![v2, v0, v8]]
                 }
                 (true, false) => {
                     let v4 = with_r(space.midpoint(xy0, xy2), delta_r);
 
-                    let v0 = space.to_blender(v0);
-                    let v2 = space.to_blender(v2);
-                    let v3 = space.to_blender(v3);
-                    let v4 = space.to_blender(v4);
-
                     vec![vec![v0, v3, v4], vec![v4, v3, v2]]
                 }
                 (false, true) => {
                     let v5 = with_r(space.midpoint(xy0, xy3), delta_r);
-
-                    let v0 = space.to_blender(v0);
-                    let v2 = space.to_blender(v2);
-                    let v3 = space.to_blender(v3);
-                    let v5 = space.to_blender(v5);
 
                     vec![vec![v0, v5, v2], vec![v5, v3, v2]]
                 }
@@ -145,16 +126,14 @@ where
                     let v4 = with_r(space.midpoint(xy0, xy2), delta_r);
                     let v5 = with_r(space.midpoint(xy0, xy3), delta_r);
 
-                    let v0 = space.to_blender(v0);
-                    let v2 = space.to_blender(v2);
-                    let v3 = space.to_blender(v3);
-                    let v4 = space.to_blender(v4);
-                    let v5 = space.to_blender(v5);
-
                     vec![vec![v0, v5, v4], vec![v4, v5, v3, v2]]
                 }
             }
-        }
+        };
+
+        let faces = subdivide_faces(faces.iter().map(|face| face.as_slice()), 0.25);
+
+        multi_face_to_blender(space, faces)
     }
 }
 

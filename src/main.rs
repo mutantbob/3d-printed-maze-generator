@@ -100,7 +100,7 @@ pub fn draw_hex_maze(fname: &str) -> Result<(), std::io::Error> {
 pub fn draw_square_maze(fname: &str) -> Result<(), std::io::Error> {
     let generator = maze::MazeGenerator::new();
 
-    let topology = SquareMazeTopology::new(14, 12);
+    let topology = SquareMazeTopology::new(14, 11);
 
     let mut rng = ChaCha8Rng::from_seed([7; 32]);
 
@@ -127,7 +127,7 @@ pub fn draw_square_maze(fname: &str) -> Result<(), std::io::Error> {
     let max_rho = topology.maximum_x();
     let groove_depth = 2.0;
     let cylindrical = CylindricalSpace {
-        r0: 15.0 - groove_depth,
+        r0: 16.0 - groove_depth,
         max_rho,
     };
 

@@ -1,3 +1,4 @@
+use crate::Edge;
 use rand::Rng;
 use std::cmp::Ordering;
 use std::collections::hash_map::Entry;
@@ -28,7 +29,7 @@ where
         neighbors: FN,
         finisher: Option<F2>,
         eligible_to_finish: F3,
-    ) -> Vec<(T, T)>
+    ) -> Vec<Edge<T>>
     where
         FN: Fn(&T) -> I,
         I: IntoIterator<Item = T>,
@@ -38,7 +39,7 @@ where
     {
         self.boundary.push(start.clone());
 
-        let mut rval = vec![];
+        let mut rval: Vec<Edge<T>> = vec![];
         loop {
             if self.boundary.is_empty() {
                 break;
@@ -64,7 +65,7 @@ where
 
             if !candidates.is_empty() {
                 let old = candidates.remove(rng.gen_range(0..candidates.len()));
-                let edge = (old, item.clone());
+                let edge = Edge(old, item.clone());
                 rval.push(edge);
             }
             self.visited.insert(item);
@@ -79,7 +80,7 @@ where
 
     pub(crate) fn augment<F, F2, RNG>(
         &self,
-        edges: &mut Vec<(T, T)>,
+        edges: &mut Vec<Edge<T>>,
         start: T,
         rng: &mut RNG,
         finisher: F2,
@@ -127,10 +128,10 @@ where
         let winner = far[rng.gen_range(0..far.len())].clone();
 
         let tail = finisher(&winner);
-        edges.push((winner, tail));
+        edges.push(Edge(winner, tail));
     }
 
-    pub fn connected(node: &T, edges: &[(T, T)]) -> Vec<T> {
+    pub fn connected(node: &T, edges: &[Edge<T>]) -> Vec<T> {
         let mut rval = Vec::new();
 
         for edge in edges {

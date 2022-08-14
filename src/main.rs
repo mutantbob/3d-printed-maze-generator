@@ -30,15 +30,15 @@ mod tools;
 mod walls;
 
 fn main() {
-    match 2 {
+    match 4 {
         2 => {
-            let _ = draw_hex_maze("/tmp/x.svg");
+            let _ = craft_hex_maze_1("/tmp/x.svg", "/tmp/geom-hex.py");
         }
         3 => {
             let _ = experiments::check_blender_math("/tmp/x.py");
         }
         4 => {
-            let _ = draw_square_maze("/tmp/square.svg");
+            let _ = craft_square_maze_1("/tmp/square.svg", "/tmp/geom-sq.py");
         }
         _ => {
             let _ = experiments::svg_check();
@@ -53,32 +53,72 @@ pub struct MazeDimensions {
     groove_radius: f32,
     /// the main radius of the maze cylinder
     maze_outer_radius: f32,
+    /// z coordinate of the "bottom" of the maze (before we augment it with a rest groove and grip cap)
+    bottom_z: f32,
+    /// Z coordinate of the "top" of the maze
+    top_z: f32,
 }
 
-pub fn draw_hex_maze(fname: &str) -> Result<(), std::io::Error> {
+pub fn craft_hex_maze_1(svg_fname: &str, blender_fname_py: &str) -> Result<(), std::io::Error> {
+    let topology = HexMazeTopology::new(14, 14);
+
+    let shell_r = 10.0;
+    let groove_r = 8.0;
+
+    let cylindrical = CylindricalSpace {
+        r0: groove_r,
+        max_rho: topology.maximum_x(),
+    };
+
+    let maze_dimensions = MazeDimensions {
+        inner_radius: 7.5,
+        groove_radius: groove_r,
+        maze_outer_radius: shell_r,
+        bottom_z: cylindrical.scale_z(-3.0),
+        top_z: cylindrical.scale_z(topology.maximum_y() + 2.5),
+    };
+
+    craft_hex_maze(
+        svg_fname,
+        blender_fname_py,
+        topology,
+        ChaCha8Rng::from_seed([7; 32]),
+        cylindrical,
+        maze_dimensions,
+    )
+}
+
+pub fn craft_hex_maze(
+    fname: &str,
+    blender_fname_py: &str,
+    topology1: HexMazeTopology,
+    mut rng: ChaCha8Rng,
+    cylindrical: CylindricalSpace,
+    maze_dimensions: MazeDimensions,
+) -> Result<(), std::io::Error> {
     let generator = maze::MazeGenerator::new();
-    let topology1 = HexMazeTopology::new(14, 14);
 
-    let mut rng = ChaCha8Rng::from_seed([7; 32]);
-
+    let start = HexCellAddress::new(0, 0);
+    let finisher = Some(|end: &HexCellAddress| HexCellAddress::new(end.u, end.v + 1));
+    let eligible_to_finish = |cell: &HexCellAddress| {
+        let (_, y) = cell.coords_2d();
+        y + 0.2 >= topology1.max_y
+    };
     let mut edges: Vec<_> = generator
         .generate_edges(
             &mut rng,
-            HexCellAddress::new(0, 0),
+            start,
             |cell| topology1.neighbors(cell),
-            Some(|end: &HexCellAddress| HexCellAddress::new(end.u, end.v + 1)),
-            |cell| {
-                let (_, y) = cell.coords_2d();
-                y + 0.2 >= topology1.max_y
-            },
+            finisher,
+            eligible_to_finish,
         )
         .into_iter()
-        .map(|(c1, c2)| Edge::<HexCellAddress>(c1, c2))
+        // .map(|(c1, c2)| Edge::<HexCellAddress>(c1, c2))
         .collect();
 
     edges.push(Edge::<HexCellAddress>(
-        HexCellAddress::new(0, 0),
-        HexCellAddress::new(0, -1),
+        start,
+        HexCellAddress::new(start.u, start.v - 1),
     ));
 
     save_edges_svg(fname, &edges)?;
@@ -87,52 +127,65 @@ pub fn draw_hex_maze(fname: &str) -> Result<(), std::io::Error> {
 
     println!("{} edges; {} walls", edges.len(), walls.len());
 
-    let max_rho = topology1.maximum_x();
-    let shell_r = 10.0;
-    let groove_r = 8.0;
-
-    let maze_dimensions = MazeDimensions {
-        inner_radius: 7.5,
-        groove_radius: groove_r,
-        maze_outer_radius: shell_r,
-    };
-    let cylindrical = CylindricalSpace {
-        r0: maze_dimensions.groove_radius,
-        max_rho,
-    };
     write_blender_python(
-        "/tmp/geom-hex.py",
+        blender_fname_py,
         &edges,
         &walls,
         &cylindrical,
-        -3.0,
-        topology1.maximum_y() + 2.5,
         &maze_dimensions,
     )?;
 
     Ok(())
 }
 
-pub fn draw_square_maze(fname: &str) -> Result<(), std::io::Error> {
+pub fn craft_square_maze_1(fname: &str, blender_fname_py: &str) -> Result<(), std::io::Error> {
+    let topology = SquareMazeTopology::new(14, 11);
+    let max_rho = topology.maximum_x();
+
+    let cylindrical = CylindricalSpace { r0: 14.0, max_rho };
+
+    let maze_dimensions = MazeDimensions {
+        inner_radius: 12.5,
+        groove_radius: 14.0,
+        maze_outer_radius: 16.0,
+        bottom_z: cylindrical.scale_z(-2.1),
+        top_z: cylindrical.scale_z(topology.maximum_y() + 2.5),
+    };
+
+    draw_square_maze(
+        fname,
+        blender_fname_py,
+        topology,
+        ChaCha8Rng::from_seed([7; 32]),
+        cylindrical,
+        maze_dimensions,
+    )
+}
+
+pub fn draw_square_maze(
+    fname: &str,
+    blender_fname_py: &str,
+    topology: SquareMazeTopology,
+    mut rng: ChaCha8Rng,
+    cylindrical: CylindricalSpace,
+    maze_dimensions: MazeDimensions,
+) -> Result<(), std::io::Error> {
     let generator = maze::MazeGenerator::new();
 
-    let topology = SquareMazeTopology::new(14, 11);
-
-    let mut rng = ChaCha8Rng::from_seed([7; 32]);
-
+    let start = SqCellAddress::new(0, 0);
     let mut edges: Vec<_> = generator
         .generate_edges(
             &mut rng,
-            SqCellAddress::new(0, 0),
+            start,
             |cell| topology.neighbors(cell),
             Some(|end: &SqCellAddress| SqCellAddress::new(end.u, end.v + 1)),
             |cell| cell.v + 1 >= topology.v_count as i32,
         )
         .into_iter()
-        .map(|(c1, c2)| Edge(c1, c2))
+        // .map(|(c1, c2)| Edge(c1, c2))
         .collect();
 
-    edges.push(Edge(SqCellAddress::new(0, 0), SqCellAddress::new(0, -1)));
+    edges.push(Edge(start, SqCellAddress::new(start.u, start.v - 1)));
 
     save_edges_svg(fname, &edges)?;
 
@@ -140,26 +193,11 @@ pub fn draw_square_maze(fname: &str) -> Result<(), std::io::Error> {
 
     println!("{} edges; {} walls", edges.len(), walls.len());
 
-    let max_rho = topology.maximum_x();
-
-    let maze_dimensions = MazeDimensions {
-        inner_radius: 13.0,
-        groove_radius: 14.0,
-        maze_outer_radius: 16.0,
-    };
-
-    let cylindrical = CylindricalSpace {
-        r0: maze_dimensions.groove_radius,
-        max_rho,
-    };
-
     write_blender_python(
-        "/tmp/geom-sq.py",
+        blender_fname_py,
         edges.as_slice(),
         &walls,
         &cylindrical,
-        -2.1,
-        topology.maximum_y() + 2.5,
         &maze_dimensions,
     )?;
 
@@ -171,8 +209,6 @@ pub fn write_blender_python<CA: CellAddress>(
     edges: &[Edge<CA>],
     walls: &[MazeWall<CA>],
     cylindrical: &CylindricalSpace,
-    prescale_bottom_z: f32,
-    prescale_top_z: f32,
     maze_dimensions: &MazeDimensions,
 ) -> Result<(), std::io::Error>
 where
@@ -203,8 +239,8 @@ where
     if true {
         finish_cylinder(
             &mut blender,
-            cylindrical.scale_z(prescale_bottom_z),
-            cylindrical.scale_z(prescale_top_z),
+            maze_dimensions.bottom_z,
+            maze_dimensions.top_z,
         );
     }
 

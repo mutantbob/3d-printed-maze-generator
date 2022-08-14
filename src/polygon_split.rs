@@ -154,7 +154,11 @@ impl<'a> PolygonSlicer<'a> {
                     if !degenerate_start {
                         new_face.push(v2);
                     }
-                    new_face.extend([v1, self.face[gamma], v4]);
+                    new_face.push(v1);
+                    if v1 != self.face[gamma] {
+                        new_face.push(self.face[gamma]);
+                    }
+                    new_face.push(v4);
                     if degenerate_face(&new_face) {
                         slice_debug!("gamma overshoot degenerate face");
                     }
@@ -253,7 +257,20 @@ impl<'a> PolygonSlicer<'a> {
 }
 
 fn degenerate_face(face: &[CylindricalCoodinate]) -> bool {
-    face.len() > 2 && face[0] == *face.last().unwrap()
+    if face.len() <= 2 {
+        return true;
+    }
+
+    for i in 0..face.len() {
+        for j in (i + 1)..face.len() {
+            if face[i] == face[j] {
+                return true;
+            }
+        }
+    }
+    // face.len() > 2 && face[0] == *face.last().unwrap()
+
+    false
 }
 
 fn project(a: &CylindricalCoodinate, b: &CylindricalCoodinate, rho: f32) -> CylindricalCoodinate {
@@ -630,6 +647,34 @@ mod test {
                 rho: 0.6666667,
                 r: 2.0,
                 z: 3.4641016,
+            },
+        ];
+
+        subdivide_face(face_raw.as_slice(), 0.25);
+    }
+
+    #[test]
+    pub fn test_subdivide_9() {
+        let face_raw = vec![
+            CylindricalCoodinate {
+                rho: 0.3333333,
+                r: 2.0,
+                z: -1.1547005,
+            },
+            CylindricalCoodinate {
+                rho: 0.16666667,
+                r: 2.0,
+                z: -1.4433756,
+            },
+            CylindricalCoodinate {
+                rho: 0.33333334,
+                r: 2.0,
+                z: -1.7320507,
+            },
+            CylindricalCoodinate {
+                rho: 0.6666666,
+                r: 2.0,
+                z: -1.1547005,
             },
         ];
 

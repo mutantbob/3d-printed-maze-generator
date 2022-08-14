@@ -184,17 +184,7 @@ where
 }
 
 fn finish_cylinder(mesh: &mut BlenderGeometry, bottom_z: f32, top_z: f32) {
-    let mut edge_counts = HashMap::new();
-
-    for face in mesh.face_iter() {
-        for (i, v1) in face.iter().enumerate() {
-            let v2 = face[(i + 1) % face.len()];
-            let edge = BidirectionalEdge::new(*v1, v2);
-            let entry = edge_counts.entry(edge);
-            let count = entry.or_insert(0);
-            *count += 1;
-        }
-    }
+    let edge_counts = count_edges(mesh);
 
     let mut accum = RingAccumulator::default();
 
@@ -242,6 +232,21 @@ fn finish_cylinder(mesh: &mut BlenderGeometry, bottom_z: f32, top_z: f32) {
             mesh.add_face(ring);
         }
     }
+}
+
+fn count_edges(mesh: &mut BlenderGeometry) -> HashMap<BidirectionalEdge, i32> {
+    let mut edge_counts = HashMap::new();
+
+    for face in mesh.face_iter() {
+        for (i, v1) in face.iter().enumerate() {
+            let v2 = face[(i + 1) % face.len()];
+            let edge = BidirectionalEdge::new(*v1, v2);
+            let entry = edge_counts.entry(edge);
+            let count = entry.or_insert(0);
+            *count += 1;
+        }
+    }
+    edge_counts
 }
 
 fn is_clockwise((x1, y1): (f32, f32), (x2, y2): (f32, f32)) -> bool {

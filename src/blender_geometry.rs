@@ -1,12 +1,12 @@
 use std::io::Write;
 
-pub type Point3D = [f32; 3];
+pub type Point3D = euclid::Point3D<f32, ()>;
 
 #[derive(Default)]
 pub struct BlenderGeometry {
     vertices: Vec<Point3D>,
     faces: Vec<Vec<usize>>,
-    pub epsilon: Option<f32>,
+    // pub epsilon: Option<f32>,
 }
 
 const MAX_EPSILON: f32 = 5.0e-5;
@@ -45,11 +45,11 @@ impl BlenderGeometry {
             .map(|(idx, _)| idx)
     }
 
-    pub(crate) fn emit(&self, sink: &mut dyn Write) -> Result<(), std::io::Error> {
+    pub fn emit(&self, sink: &mut dyn Write) -> Result<(), std::io::Error> {
         writeln!(sink, "vertices = [")?;
 
         for vertex in &self.vertices {
-            writeln!(sink, "  [{},{},{}],", vertex[0], vertex[1], vertex[2])?;
+            writeln!(sink, "  [{},{},{}],", vertex.x, vertex.y, vertex.z)?;
         }
         writeln!(sink, "]")?;
 
@@ -70,26 +70,30 @@ impl BlenderGeometry {
         self.faces.iter().map(|face| face.as_slice())
     }
 
-    pub(crate) fn get_vertex(&self, idx: usize) -> &Point3D {
+    pub fn get_vertex(&self, idx: usize) -> &Point3D {
         &self.vertices[idx]
     }
 
-    fn close_enough(&mut self, p0: &Point3D, p1: &Point3D) -> bool {
-        let dx = (p0[0] - p1[0]).abs();
-        let dy = (p0[1] - p1[1]).abs();
-        let dz = (p0[2] - p1[2]).abs();
+    pub fn close_enough(&self, p0: &Point3D, p1: &Point3D) -> bool {
+        let dx = (p0.x - p1.x).abs();
+        let dy = (p0.y - p1.y).abs();
+        let dz = (p0.z - p1.z).abs();
         let delta = dx.max(dy).max(dz);
         if delta <= MAX_EPSILON {
             return true;
         }
-        match self.epsilon {
+        /* match self.epsilon {
             None => self.epsilon = Some(delta),
             Some(old_epsilon) => {
                 if delta < old_epsilon {
                     self.epsilon = Some(delta)
                 }
             }
-        }
+        }*/
         false
+    }
+
+    pub fn face_count(&self) -> usize {
+        self.faces.len()
     }
 }

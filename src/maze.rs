@@ -78,7 +78,7 @@ where
         rval
     }
 
-    pub(crate) fn augment<F, F2, RNG>(
+    pub fn augment<F, F2, RNG>(
         &self,
         edges: &mut Vec<Edge<T>>,
         start: T,

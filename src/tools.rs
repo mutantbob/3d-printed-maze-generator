@@ -218,7 +218,12 @@ impl BlenderMapping<CylindricalCoodinate> for CylindricalSpace {
 
         let z = self.scale_z(cc.z);
 
-        [x, y, z]
+        Point3D {
+            x,
+            y,
+            z,
+            _unit: Default::default(),
+        }
     }
 }
 

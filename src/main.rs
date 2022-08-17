@@ -1,5 +1,6 @@
 extern crate core;
 
+use crate::cut::{HalfSpace, Point3Ds, Vector3Ds};
 use crate::walls::{add_edge_flat, add_wall, compute_walls};
 use blender_geometry::{BlenderGeometry, Point3D};
 use hexagonal::{HexCellAddress, HexMazeTopology};
@@ -18,6 +19,7 @@ use tools::{
 use walls::{CorridorPolygons, WallPolygons};
 
 mod blender_geometry;
+mod cut;
 mod experiments;
 mod hexagonal;
 mod maze;
@@ -70,12 +72,17 @@ pub fn craft_hex_maze_1(svg_fname: &str, blender_fname_py: &str) -> Result<(), s
         max_rho: topology.maximum_x(),
     };
 
+    let prescale_top_z = topology.maximum_y() + 1.5;
     let maze_dimensions = MazeDimensions {
         inner_radius: 7.5,
         groove_radius: groove_r,
         maze_outer_radius: shell_r,
         bottom_z: cylindrical.scale_z(-3.0),
-        top_z: cylindrical.scale_z(topology.maximum_y() + 2.5),
+        top_z: if true {
+            61.0
+        } else {
+            cylindrical.scale_z(prescale_top_z)
+        },
     };
 
     craft_hex_maze(
@@ -149,7 +156,11 @@ pub fn craft_square_maze_1(fname: &str, blender_fname_py: &str) -> Result<(), st
         groove_radius: 14.0,
         maze_outer_radius: 16.0,
         bottom_z: cylindrical.scale_z(-2.1),
-        top_z: cylindrical.scale_z(topology.maximum_y() + 2.5),
+        top_z: if true {
+            68.05
+        } else {
+            cylindrical.scale_z(topology.maximum_y() + 2.5)
+        },
     };
 
     draw_square_maze(
@@ -237,14 +248,10 @@ where
     }
 
     if true {
-        finish_cylinder(
-            &mut blender,
-            maze_dimensions.bottom_z,
-            maze_dimensions.top_z,
-        );
+        blender = finish_cylinder(blender, maze_dimensions);
     }
 
-    println!("epsilon = {:?}", blender.epsilon);
+    // println!("epsilon = {:?}", blender.epsilon);
 
     let mut f = File::create(fname)?;
     blender.emit(&mut f)?;
@@ -253,8 +260,21 @@ where
     Ok(())
 }
 
-fn finish_cylinder(mesh: &mut BlenderGeometry, bottom_z: f32, top_z: f32) {
-    let edge_counts = count_edges(mesh);
+fn finish_cylinder(mesh: BlenderGeometry, maze_dimensions: &MazeDimensions) -> BlenderGeometry {
+    let bottom_z = maze_dimensions.bottom_z;
+    let top_z = maze_dimensions.top_z;
+
+    let mut mesh = clip(
+        &mesh,
+        &HalfSpace {
+            v0: Point3Ds::new(0.0, 0.0, top_z),
+            normal: Vector3Ds::new(0.0, 0.0, -1.0),
+        },
+    );
+
+    let mid_z = 0.5 * (bottom_z + top_z);
+
+    let edge_counts = count_edges(&mesh);
 
     let mut accum = RingAccumulator::default();
 
@@ -265,25 +285,58 @@ fn finish_cylinder(mesh: &mut BlenderGeometry, bottom_z: f32, top_z: f32) {
             }
             Ordering::Equal => {}
             Ordering::Greater => {
-                let &[x1, y1, z1] = mesh.get_vertex(edge.idx1);
-                let &[x2, y2, z2] = mesh.get_vertex(edge.idx2);
+                let v1 = mesh.get_vertex(edge.idx1);
+                let v2 = mesh.get_vertex(edge.idx2);
 
-                if (x1 - x2).abs().max((y1 - y2).abs()) < 1.0e-6 {
+                if (v1.x - v2.x).abs().max((v1.y - v2.y).abs()) < 1.0e-6 {
                     println!("alarmingly vertical edge, this could cause problems")
                 }
 
-                let low = z1 < 0.5 * (bottom_z + top_z);
+                let Point3D {
+                    x: x1,
+                    y: y1,
+                    z: z1,
+                    ..
+                } = *v1;
+
+                let Point3D {
+                    x: x2,
+                    y: y2,
+                    // z: z2,
+                    ..
+                } = *v2;
+
+                let low = z1 < mid_z;
                 let clockwise = is_clockwise((x1, y1), (x2, y2));
                 let z0 = if low { bottom_z } else { top_z };
 
-                let v3 = [x1, y1, z0];
-                let v4 = [x2, y2, z0];
-                if low != clockwise {
+                let v3 = Point3D::new(x1, y1, z0);
+                let v4 = Point3D::new(x2, y2, z0);
+                let new_face = if low != clockwise {
                     accum.absorb(v4, v3); // this affects the order of the final ring
-                    mesh.add_face(&[[x1, y1, z1], v3, v4, [x2, y2, z2]])
+
+                    let mut new_face = vec![*v2, *v1];
+                    if !mesh.close_enough(&v3, v1) {
+                        new_face.push(v3)
+                    }
+                    if !mesh.close_enough(&v4, v2) && !mesh.close_enough(&v3, &v4) {
+                        new_face.push(v4)
+                    }
+                    new_face
                 } else {
                     accum.absorb(v3, v4);
-                    mesh.add_face(&[[x1, y1, z1], [x2, y2, z2], v4, v3])
+
+                    let mut new_face = vec![*v1, *v2];
+                    if !mesh.close_enough(&v4, v2) {
+                        new_face.push(v4)
+                    }
+                    if !mesh.close_enough(&v3, v1) && !mesh.close_enough(&v3, &v4) {
+                        new_face.push(v3)
+                    }
+                    new_face
+                };
+                if new_face.len() > 2 {
+                    mesh.add_face(new_face.as_slice())
                 }
             }
         }
@@ -302,9 +355,27 @@ fn finish_cylinder(mesh: &mut BlenderGeometry, bottom_z: f32, top_z: f32) {
             mesh.add_face(ring);
         }
     }
+
+    mesh
 }
 
-fn count_edges(mesh: &mut BlenderGeometry) -> HashMap<BidirectionalEdge, i32> {
+fn clip(mesh: &BlenderGeometry, half_space: &HalfSpace) -> BlenderGeometry {
+    let mut rval = BlenderGeometry::new();
+
+    for face in mesh.face_iter() {
+        let polygon: Vec<_> = face.iter().map(|&idx| *mesh.get_vertex(idx)).collect();
+        let p2 = half_space.intersect_polygon(polygon.as_slice());
+        if p2.len() > 2 {
+            rval.add_face(&p2);
+        }
+    }
+
+    println!("{} faces after clip", rval.face_count());
+
+    rval
+}
+
+fn count_edges(mesh: &BlenderGeometry) -> HashMap<BidirectionalEdge, i32> {
     let mut edge_counts = HashMap::new();
 
     for face in mesh.face_iter() {

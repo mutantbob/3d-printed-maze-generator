@@ -109,12 +109,11 @@ impl RingAccumulator {
         }
     }
 
-    fn close_enough(p1: &Point3D, p2: &Point3D) -> bool {
-        let delta = p1
-            .iter()
-            .zip(p2.iter())
-            .map(|(a, b)| (a - b).abs())
-            .fold(0.0, |a, b| if a < b { b } else { a });
+    pub fn close_enough(p1: &Point3D, p2: &Point3D) -> bool {
+        let delta = (p1.x - p2.x)
+            .abs()
+            .max((p1.y - p2.y).abs())
+            .max((p1.z - p2.z).abs());
         delta < 1.0e-6
     }
 }

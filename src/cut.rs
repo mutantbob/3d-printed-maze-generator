@@ -1,8 +1,5 @@
 use crate::tools::lerp;
-use euclid::{Point3D, Vector3D};
-
-pub type Point3Ds = Point3D<f32, ()>;
-pub type Vector3Ds = Vector3D<f32, ()>;
+use crate::{Point3Ds, Vector3Ds};
 
 /// if (v-v0).dot(normal) >= 0.0, then the point is inside the half-plane
 pub struct HalfSpace {

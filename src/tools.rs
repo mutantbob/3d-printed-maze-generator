@@ -1,4 +1,4 @@
-use crate::Point3D;
+use crate::Point3Ds;
 use std::f32::consts::{PI, TAU};
 use std::hash::Hash;
 
@@ -35,7 +35,7 @@ pub trait Space<C> {
 }
 
 pub trait BlenderMapping<COORD> {
-    fn to_blender(&self, cc: COORD) -> Point3D;
+    fn to_blender(&self, cc: COORD) -> Point3Ds;
 }
 
 pub trait EdgeCornerMapping<CA> {
@@ -209,7 +209,7 @@ impl CylindricalSpace {
 }
 
 impl BlenderMapping<CylindricalCoodinate> for CylindricalSpace {
-    fn to_blender(&self, cc: CylindricalCoodinate) -> Point3D {
+    fn to_blender(&self, cc: CylindricalCoodinate) -> Point3Ds {
         let max_rho = self.max_rho;
 
         let theta = cc.rho / max_rho * TAU;
@@ -218,7 +218,7 @@ impl BlenderMapping<CylindricalCoodinate> for CylindricalSpace {
 
         let z = self.scale_z(cc.z);
 
-        Point3D {
+        Point3Ds {
             x,
             y,
             z,

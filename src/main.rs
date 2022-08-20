@@ -1,8 +1,9 @@
 extern crate core;
 
-use crate::cut::{HalfSpace, Point3Ds, Vector3Ds};
+use crate::cut::HalfSpace;
 use crate::walls::{add_edge_flat, add_wall, compute_walls};
-use blender_geometry::{BlenderGeometry, Point3D};
+use blender_geometry::BlenderGeometry;
+use euclid::Vector3D;
 use hexagonal::{HexCellAddress, HexMazeTopology};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -10,6 +11,7 @@ use ring::RingAccumulator;
 use square::{SqCellAddress, SquareMazeTopology};
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::f32::consts::{PI, TAU};
 use std::fs::File;
 use std::io::Write;
 use tools::{
@@ -30,6 +32,9 @@ mod square;
 mod test;
 mod tools;
 mod walls;
+
+pub type Point3Ds = euclid::Point3D<f32, ()>;
+pub type Vector3Ds = Vector3D<f32, ()>;
 
 fn main() {
     match 4 {
@@ -59,6 +64,12 @@ pub struct MazeDimensions {
     bottom_z: f32,
     /// Z coordinate of the "top" of the maze
     top_z: f32,
+    /// Z coordinate of the bottom of the inside of the cylinder
+    pocket_z: f32,
+    /// z coordinate of the top of the maze grip
+    grip_top: f32,
+    ///
+    cap_outer_radius: f32,
 }
 
 pub fn craft_hex_maze_1(svg_fname: &str, blender_fname_py: &str) -> Result<(), std::io::Error> {
@@ -73,16 +84,20 @@ pub fn craft_hex_maze_1(svg_fname: &str, blender_fname_py: &str) -> Result<(), s
     };
 
     let prescale_top_z = topology.maximum_y() + 1.5;
+    let bottom_z = cylindrical.scale_z(-3.0);
     let maze_dimensions = MazeDimensions {
         inner_radius: 7.5,
         groove_radius: groove_r,
         maze_outer_radius: shell_r,
-        bottom_z: cylindrical.scale_z(-3.0),
+        bottom_z: bottom_z,
         top_z: if true {
             61.0
         } else {
             cylindrical.scale_z(prescale_top_z)
         },
+        pocket_z: bottom_z + 2.0,
+        grip_top: -10.6055,
+        cap_outer_radius: shell_r + 3.0,
     };
 
     craft_hex_maze(
@@ -151,16 +166,20 @@ pub fn craft_square_maze_1(fname: &str, blender_fname_py: &str) -> Result<(), st
 
     let cylindrical = CylindricalSpace { r0: 14.0, max_rho };
 
+    let bottom_z = -14.0; //cylindrical.scale_z(-2.1);
     let maze_dimensions = MazeDimensions {
         inner_radius: 12.5,
         groove_radius: 14.0,
         maze_outer_radius: 16.0,
-        bottom_z: cylindrical.scale_z(-2.1),
+        bottom_z: bottom_z,
         top_z: if true {
             68.05
         } else {
             cylindrical.scale_z(topology.maximum_y() + 2.5)
         },
+        pocket_z: bottom_z + 2.0,
+        grip_top: -10.0,
+        cap_outer_radius: 19.0,
     };
 
     draw_square_maze(
@@ -286,6 +305,14 @@ fn finish_cylinder(mesh: BlenderGeometry, maze_dimensions: &MazeDimensions) -> B
         },
     );
 
+    let mut mesh = clip(
+        &mesh,
+        &HalfSpace {
+            v0: Point3Ds::new(0.0, 0.0, maze_dimensions.grip_top),
+            normal: [0.0, 0.0, 1.0].into(),
+        },
+    );
+
     let mid_z = 0.5 * (bottom_z + top_z);
 
     let edge_counts = count_edges(&mesh);
@@ -313,7 +340,7 @@ fn finish_cylinder(mesh: BlenderGeometry, maze_dimensions: &MazeDimensions) -> B
                     &mut mesh,
                     &mut accum,
                     low,
-                    if low { bottom_z } else { top_z },
+                    if low { maze_dimensions.grip_top } else { top_z },
                 );
             }
         }
@@ -325,6 +352,44 @@ fn finish_cylinder(mesh: BlenderGeometry, maze_dimensions: &MazeDimensions) -> B
         accum.closed_strings.len()
     );
 
+    match 2.cmp(&accum.closed_strings.len()) {
+        Ordering::Less => {
+            println!("oh no, too few edges");
+
+            for ring in &accum.closed_strings {
+                mesh.add_face(ring);
+            }
+        }
+        Ordering::Equal => {
+            let string2 = accum.closed_strings.remove(1);
+            let string1 = accum.closed_strings.remove(0);
+            let (bottom, top) = {
+                if string1.first().unwrap().z < string2.first().unwrap().z {
+                    (string1, string2)
+                } else {
+                    (string2, string1)
+                }
+            };
+            // mesh.add_face(&bottom);
+            finish_cylinder_top(
+                &mut mesh,
+                &top,
+                maze_dimensions.inner_radius,
+                maze_dimensions.top_z,
+                maze_dimensions.pocket_z,
+            );
+            finish_cylinder_bottom(
+                &mut mesh,
+                &bottom,
+                maze_dimensions.cap_outer_radius,
+                maze_dimensions.grip_top,
+                maze_dimensions.bottom_z,
+            )
+        }
+        Ordering::Greater => {
+            println!("how did this happen?");
+        }
+    }
     if accum.closed_strings.len() > 2 {
         println!("how did this happen?");
     } else {
@@ -337,21 +402,21 @@ fn finish_cylinder(mesh: BlenderGeometry, maze_dimensions: &MazeDimensions) -> B
 }
 
 fn extrude_edge(
-    v1: &Point3D,
-    v2: &Point3D,
+    v1: &Point3Ds,
+    v2: &Point3Ds,
     mesh: &mut BlenderGeometry,
     accum: &mut RingAccumulator,
     hippo: bool,
     z0: f32,
 ) {
-    let Point3D {
+    let Point3Ds {
         x: x1,
         y: y1,
-        z: z1,
+        // z: z1,
         ..
     } = *v1;
 
-    let Point3D {
+    let Point3Ds {
         x: x2,
         y: y2,
         // z: z2,
@@ -360,8 +425,8 @@ fn extrude_edge(
 
     let clockwise = is_clockwise((x1, y1), (x2, y2));
 
-    let v3 = Point3D::new(x1, y1, z0);
-    let v4 = Point3D::new(x2, y2, z0);
+    let v3 = Point3Ds::new(x1, y1, z0);
+    let v4 = Point3Ds::new(x2, y2, z0);
 
     let (v1, v2, v3, v4) = if hippo != clockwise {
         (v1, v2, v3, v4)
@@ -419,6 +484,190 @@ fn is_clockwise((x1, y1): (f32, f32), (x2, y2): (f32, f32)) -> bool {
     let cross = x1 * y2 - y1 * x2;
     cross < 0.0
 }
+
+fn finish_cylinder_top(
+    mesh: &mut BlenderGeometry,
+    outer_ring: &Vec<Point3Ds>,
+    core_radius: f32,
+    high_z: f32,
+    pocket_z: f32,
+) {
+    let interior_face_count = 12 * 4;
+
+    let ring: Vec<_> = (0..interior_face_count)
+        .map(|i| {
+            let theta = TAU * i as f32 / interior_face_count as f32;
+            let x = core_radius * theta.cos();
+            let y = core_radius * theta.sin();
+            (x, y)
+        })
+        .collect();
+
+    let top_ring: Vec<_> = ring
+        .iter()
+        .map(|(x, y)| Point3Ds::new(*x, *y, high_z))
+        .collect();
+    let bottom_ring: Vec<_> = ring
+        .into_iter()
+        .map(|(x, y)| Point3Ds::new(x, y, pocket_z))
+        .collect();
+
+    mesh.add_face(&bottom_ring);
+
+    for (i, (v1, v3)) in top_ring.iter().zip(bottom_ring.iter()).enumerate() {
+        let i2 = (i + 1) % top_ring.len();
+        let v2 = top_ring[i2];
+        let v4 = bottom_ring[i2];
+
+        mesh.add_face([*v1, v2, v4, *v3].as_slice())
+    }
+
+    for face in bridge_rings(outer_ring, &top_ring) {
+        mesh.add_face(&face)
+    }
+
+    // mesh.add_face(&top);
+}
+
+pub fn finish_cylinder_bottom(
+    mesh: &mut BlenderGeometry,
+    bottom: &[Point3Ds],
+    outer_radius: f32,
+    grip_top: f32,
+    bottom_z: f32,
+) {
+    println!("grip top {}; bottom_z {}", grip_top, bottom_z);
+
+    let interior_face_count = 12 * 4;
+
+    let ring: Vec<_> = (0..interior_face_count)
+        .map(|i| {
+            let theta = -TAU * i as f32 / interior_face_count as f32;
+            let x = outer_radius * theta.cos();
+            let y = outer_radius * theta.sin();
+            (x, y)
+        })
+        .collect();
+
+    let top_ring: Vec<_> = ring
+        .iter()
+        .map(|(x, y)| Point3Ds::new(*x, *y, grip_top))
+        .collect();
+    let bottom_ring: Vec<_> = ring
+        .into_iter()
+        .map(|(x, y)| Point3Ds::new(x, y, bottom_z))
+        .collect();
+
+    mesh.add_face(&bottom_ring);
+
+    for (i, (v1, v3)) in top_ring.iter().zip(bottom_ring.iter()).enumerate() {
+        let i2 = (i + 1) % top_ring.len();
+        let v2 = top_ring[i2];
+        let v4 = bottom_ring[i2];
+
+        mesh.add_face([*v1, v2, v4, *v3].as_slice())
+    }
+
+    for face in bridge_rings(bottom, &top_ring) {
+        mesh.add_face(&face)
+    }
+}
+
+pub fn bridge_rings(ring1: &[Point3Ds], ring2: &[Point3Ds]) -> impl Iterator<Item = Vec<Point3Ds>> {
+    let thetas1: Vec<_> = ring1.iter().map(|v1| f32::atan2(v1.y, v1.x)).collect();
+    let thetas2: Vec<_> = ring2.iter().map(|v2| f32::atan2(v2.y, v2.x)).collect();
+
+    let clockwise = ring_is_clockwise(&thetas1);
+
+    let theta0 = thetas1[0];
+
+    let base2 = thetas2
+        .iter()
+        .enumerate()
+        .fold((None, 0.0), |(old, min), (curr, rot)| {
+            let delta = radians_wrap(rot - theta0, -PI).abs();
+            match old {
+                Some(idx) => {
+                    if delta < min {
+                        (Some(curr), delta)
+                    } else {
+                        (Some(idx), min)
+                    }
+                }
+                None => (Some(curr), delta),
+            }
+        })
+        .0
+        .unwrap();
+
+    let mut cursor1 = 0;
+    let mut cursor2 = base2;
+    let mut rval = vec![];
+    while cursor1 <
+        // 20
+        ring1.len()
+        || cursor2 < base2 + ring2.len()
+    {
+        let i1b = (cursor1 + 1) % ring1.len();
+        let i2b = (cursor2 + 1) % ring2.len();
+        let c1 = cursor1 % ring1.len();
+        let v1 = ring1[c1];
+        let c2 = cursor2 % ring2.len();
+        let v2 = ring2[c2];
+        let v3 = &ring1[i1b];
+        let v4 = &ring2[i2b];
+        let theta1 = radians_middle(thetas1[c1], thetas1[i1b]);
+        let theta2 = radians_middle(thetas2[c2], thetas2[i2b]);
+        /* println!(
+            "{}<{}<{};\t{}<{}<{}",
+            thetas1[c1], theta2, thetas2[i2b], thetas2[c2], theta1, thetas1[i1b],
+        );*/
+
+        if clockwise == a_cw_of_b(theta1, theta2) {
+            rval.push(vec![v1, *v3, v2]);
+            cursor1 += 1;
+        } else {
+            rval.push(vec![v1, *v4, v2]);
+            cursor2 += 1;
+        }
+        // println!("{}, {} ; {}, {}", cursor1, cursor2, theta1, theta2);
+
+        if cursor2 > 1000 {
+            panic!("bugger");
+        }
+    }
+
+    rval.into_iter()
+}
+
+fn ring_is_clockwise(ring: &[f32]) -> bool {
+    let mut theta = ring[0];
+    for th2 in ring {
+        theta = radians_wrap(*th2, theta - PI);
+    }
+    theta > 0.0
+}
+
+pub fn radians_wrap(theta: f32, min: f32) -> f32 {
+    if theta < min {
+        theta + TAU
+    } else if theta - TAU >= min {
+        theta - TAU
+    } else {
+        theta
+    }
+}
+
+pub fn radians_middle(t1: f32, t2: f32) -> f32 {
+    let t2 = radians_wrap(t2, t1 - PI);
+    0.5 * (t1 + t2)
+}
+
+pub fn a_cw_of_b(a: f32, b: f32) -> bool {
+    radians_wrap(b - a, 0.0) < PI
+}
+
+//
 
 pub fn save_edges_svg<CA: CellAddress>(
     fname: &str,

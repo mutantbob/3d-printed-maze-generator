@@ -1,20 +1,20 @@
-use crate::Point3D;
+use crate::Point3Ds;
 
 enum RingCommand {
-    Append(Point3D),
-    Unshift(Point3D),
+    Append(Point3Ds),
+    Unshift(Point3Ds),
     Close,
     Nope,
 }
 
 #[derive(Default)]
 pub struct RingAccumulator {
-    pub open_strings: Vec<Vec<Point3D>>,
-    pub closed_strings: Vec<Vec<Point3D>>,
+    pub open_strings: Vec<Vec<Point3Ds>>,
+    pub closed_strings: Vec<Vec<Point3Ds>>,
 }
 
 impl RingAccumulator {
-    pub fn absorb(&mut self, p1: Point3D, p2: Point3D) {
+    pub fn absorb(&mut self, p1: Point3Ds, p2: Point3Ds) {
         for idx in 0..self.open_strings.len() {
             let string = &mut self.open_strings[idx];
             let cmd = Self::command_for(&p1, &p2, string);
@@ -77,7 +77,7 @@ impl RingAccumulator {
         }
     }
 
-    fn command_for(p1: &Point3D, p2: &Point3D, string: &[Point3D]) -> RingCommand {
+    fn command_for(p1: &Point3Ds, p2: &Point3Ds, string: &[Point3Ds]) -> RingCommand {
         let begin = string.first().unwrap();
         let end = string.last().unwrap();
         if Self::close_enough(begin, p1) {
@@ -109,7 +109,7 @@ impl RingAccumulator {
         }
     }
 
-    pub fn close_enough(p1: &Point3D, p2: &Point3D) -> bool {
+    pub fn close_enough(p1: &Point3Ds, p2: &Point3Ds) -> bool {
         let delta = (p1.x - p2.x)
             .abs()
             .max((p1.y - p2.y).abs())

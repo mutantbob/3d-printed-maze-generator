@@ -152,17 +152,17 @@ pub fn test_wall() {
     // let v3 = space.to_blender(v3);
     let v4 = space.to_blender(v4);
 
-    if (v0[0] - v4[0]).abs() > 2.0 {
+    if (v0.x - v4.x).abs() > 2.0 {
         panic!("problem {:?}", &wall);
     }
 }
 
 #[test]
 fn test_ring_accumulator() {
-    let p1 = [0.0, 0.0, 0.0];
-    let p2 = [1.0, 0.0, 0.0];
-    let p3 = [2.0, 0.0, 0.0];
-    let p4 = [3.0, 1.0, 0.0];
+    let p1 = [0.0, 0.0, 0.0].into();
+    let p2 = [1.0, 0.0, 0.0].into();
+    let p3 = [2.0, 0.0, 0.0].into();
+    let p4 = [3.0, 1.0, 0.0].into();
 
     {
         let mut accum = RingAccumulator::default();
@@ -222,4 +222,14 @@ fn test_ring_accumulator() {
         assert_eq!(0, accum.open_strings.len());
         assert_eq!(4, accum.closed_strings[0].len());
     }
+}
+
+#[test]
+pub fn test_angle_compare() {
+    assert_eq!(6.0, crate::radians_wrap(6.0, 0.0));
+    assert!(crate::a_cw_of_b(0.0, 1.0));
+    assert!(!crate::a_cw_of_b(1.0, 0.0));
+
+    assert!(!crate::a_cw_of_b(0.0, 6.0));
+    assert!(crate::a_cw_of_b(0.0, 0.0));
 }

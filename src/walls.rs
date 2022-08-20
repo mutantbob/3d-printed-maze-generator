@@ -1,7 +1,7 @@
 use crate::polygon_split::subdivide_faces;
 use crate::{
     with_r, BlenderGeometry, BlenderMapping, CellAddress, CylindricalCoodinate, Edge,
-    EdgeCornerMapping, HexCellAddress, MazeWall, Point3D, Space, SqCellAddress, Topology,
+    EdgeCornerMapping, HexCellAddress, MazeWall, Point3Ds, Space, SqCellAddress, Topology,
 };
 
 pub fn compute_walls<'a, TOP: Topology<'a, CA>, CA: CellAddress + PartialEq>(
@@ -90,7 +90,7 @@ where
         space: &SPACE,
         radius_high: f32,
         radius_groove: f32,
-    ) -> Vec<Vec<Point3D>>;
+    ) -> Vec<Vec<Point3Ds>>;
 }
 
 impl<SPACE> WallPolygons<SPACE> for MazeWall<HexCellAddress>
@@ -102,7 +102,7 @@ where
         space: &SPACE,
         radius_high: f32,
         radius_groove: f32,
-    ) -> Vec<Vec<Point3D>> {
+    ) -> Vec<Vec<Point3Ds>> {
         let wall = self;
 
         let xy0 = wall.a.coords_2d();
@@ -158,7 +158,7 @@ where
         space: &SPACE,
         radius_high: f32,
         radius_groove: f32,
-    ) -> Vec<Vec<Point3D>> {
+    ) -> Vec<Vec<Point3Ds>> {
         let wall = self;
 
         let xy0 = wall.a.coords_2d();
@@ -196,7 +196,7 @@ where
 fn multi_face_to_blender<SPACE, I>(
     space: &SPACE,
     faces: impl IntoIterator<Item = I>,
-) -> Vec<Vec<Point3D>>
+) -> Vec<Vec<Point3Ds>>
 where
     SPACE: BlenderMapping<CylindricalCoodinate>,
     I: IntoIterator<Item = CylindricalCoodinate>,
@@ -210,7 +210,7 @@ where
 fn face_to_blender<SPACE>(
     space: &SPACE,
     face: impl IntoIterator<Item = CylindricalCoodinate>,
-) -> Vec<Point3D>
+) -> Vec<Point3Ds>
 where
     SPACE: BlenderMapping<CylindricalCoodinate>,
 {
@@ -228,7 +228,7 @@ where
         space: &SPACE,
         radius_high: f32,
         radius_groove: f32,
-    ) -> Vec<Vec<Point3D>>;
+    ) -> Vec<Vec<Point3Ds>>;
 }
 
 impl<SPACE> CorridorPolygons<SPACE> for Edge<HexCellAddress>
@@ -240,7 +240,7 @@ where
         space: &SPACE,
         radius_high: f32,
         radius_groove: f32,
-    ) -> Vec<Vec<Point3D>> {
+    ) -> Vec<Vec<Point3Ds>> {
         let edge = self;
         let tz0 = edge.0.coords_2d();
         let mut tz1 = edge.1.coords_2d();
@@ -274,7 +274,7 @@ where
         space: &SPACE,
         radius_high: f32,
         radius_groove: f32,
-    ) -> Vec<Vec<Point3D>> {
+    ) -> Vec<Vec<Point3Ds>> {
         let edge = self;
         let xy0 = edge.0.coords_2d();
         let v0 = with_r(xy0, radius_groove);

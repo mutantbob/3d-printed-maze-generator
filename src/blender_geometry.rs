@@ -1,10 +1,9 @@
+use crate::Point3Ds;
 use std::io::Write;
-
-pub type Point3D = euclid::Point3D<f32, ()>;
 
 #[derive(Default)]
 pub struct BlenderGeometry {
-    vertices: Vec<Point3D>,
+    vertices: Vec<Point3Ds>,
     faces: Vec<Vec<usize>>,
     // pub epsilon: Option<f32>,
 }
@@ -16,7 +15,7 @@ impl BlenderGeometry {
         BlenderGeometry::default()
     }
 
-    pub fn add_face(&mut self, vertices: &[Point3D]) {
+    pub fn add_face(&mut self, vertices: &[Point3Ds]) {
         let indices = vertices
             .iter()
             .map(|xyz| self.get_or_create_vertex_index(xyz))
@@ -24,7 +23,7 @@ impl BlenderGeometry {
         self.faces.push(indices);
     }
 
-    fn get_or_create_vertex_index(&mut self, xyz: &Point3D) -> usize {
+    fn get_or_create_vertex_index(&mut self, xyz: &Point3Ds) -> usize {
         let idx = self.get_vertex_index(xyz);
         match idx {
             None => {
@@ -36,7 +35,7 @@ impl BlenderGeometry {
         }
     }
 
-    fn get_vertex_index(&mut self, xyz: &Point3D) -> Option<usize> {
+    fn get_vertex_index(&mut self, xyz: &Point3Ds) -> Option<usize> {
         self.vertices
             .clone()
             .iter()
@@ -70,11 +69,11 @@ impl BlenderGeometry {
         self.faces.iter().map(|face| face.as_slice())
     }
 
-    pub fn get_vertex(&self, idx: usize) -> &Point3D {
+    pub fn get_vertex(&self, idx: usize) -> &Point3Ds {
         &self.vertices[idx]
     }
 
-    pub fn close_enough(&self, p0: &Point3D, p1: &Point3D) -> bool {
+    pub fn close_enough(&self, p0: &Point3Ds, p1: &Point3Ds) -> bool {
         let dx = (p0.x - p1.x).abs();
         let dy = (p0.y - p1.y).abs();
         let dz = (p0.z - p1.z).abs();

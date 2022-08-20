@@ -215,13 +215,12 @@ pub fn draw_square_maze(
     Ok(())
 }
 
-pub fn write_blender_python<CA: CellAddress>(
-    fname: &str,
+pub fn maze_to_mesh<CA: CellAddress>(
     edges: &[Edge<CA>],
     walls: &[MazeWall<CA>],
     cylindrical: &CylindricalSpace,
     maze_dimensions: &MazeDimensions,
-) -> Result<(), std::io::Error>
+) -> BlenderGeometry
 where
     Edge<CA>: EdgeCornerMapping<CA> + CorridorPolygons<CylindricalSpace>,
     MazeWall<CA>: WallPolygons<CylindricalSpace>,
@@ -250,6 +249,21 @@ where
     if true {
         blender = finish_cylinder(blender, maze_dimensions);
     }
+    blender
+}
+
+pub fn write_blender_python<CA: CellAddress>(
+    fname: &str,
+    edges: &[Edge<CA>],
+    walls: &[MazeWall<CA>],
+    cylindrical: &CylindricalSpace,
+    maze_dimensions: &MazeDimensions,
+) -> Result<(), std::io::Error>
+where
+    Edge<CA>: EdgeCornerMapping<CA> + CorridorPolygons<CylindricalSpace>,
+    MazeWall<CA>: WallPolygons<CylindricalSpace>,
+{
+    let blender = maze_to_mesh(edges, walls, cylindrical, maze_dimensions);
 
     // println!("epsilon = {:?}", blender.epsilon);
 
@@ -285,59 +299,22 @@ fn finish_cylinder(mesh: BlenderGeometry, maze_dimensions: &MazeDimensions) -> B
             }
             Ordering::Equal => {}
             Ordering::Greater => {
-                let v1 = mesh.get_vertex(edge.idx1);
-                let v2 = mesh.get_vertex(edge.idx2);
+                let v1 = *mesh.get_vertex(edge.idx1);
+                let v2 = *mesh.get_vertex(edge.idx2);
 
                 if (v1.x - v2.x).abs().max((v1.y - v2.y).abs()) < 1.0e-6 {
                     println!("alarmingly vertical edge, this could cause problems")
                 }
 
-                let Point3D {
-                    x: x1,
-                    y: y1,
-                    z: z1,
-                    ..
-                } = *v1;
-
-                let Point3D {
-                    x: x2,
-                    y: y2,
-                    // z: z2,
-                    ..
-                } = *v2;
-
-                let low = z1 < mid_z;
-                let clockwise = is_clockwise((x1, y1), (x2, y2));
-                let z0 = if low { bottom_z } else { top_z };
-
-                let v3 = Point3D::new(x1, y1, z0);
-                let v4 = Point3D::new(x2, y2, z0);
-                let new_face = if low != clockwise {
-                    accum.absorb(v4, v3); // this affects the order of the final ring
-
-                    let mut new_face = vec![*v2, *v1];
-                    if !mesh.close_enough(&v3, v1) {
-                        new_face.push(v3)
-                    }
-                    if !mesh.close_enough(&v4, v2) && !mesh.close_enough(&v3, &v4) {
-                        new_face.push(v4)
-                    }
-                    new_face
-                } else {
-                    accum.absorb(v3, v4);
-
-                    let mut new_face = vec![*v1, *v2];
-                    if !mesh.close_enough(&v4, v2) {
-                        new_face.push(v4)
-                    }
-                    if !mesh.close_enough(&v3, v1) && !mesh.close_enough(&v3, &v4) {
-                        new_face.push(v3)
-                    }
-                    new_face
-                };
-                if new_face.len() > 2 {
-                    mesh.add_face(new_face.as_slice())
-                }
+                let low = v1.z < mid_z;
+                extrude_edge(
+                    &v1,
+                    &v2,
+                    &mut mesh,
+                    &mut accum,
+                    low,
+                    if low { bottom_z } else { top_z },
+                );
             }
         }
     }
@@ -359,7 +336,55 @@ fn finish_cylinder(mesh: BlenderGeometry, maze_dimensions: &MazeDimensions) -> B
     mesh
 }
 
-fn clip(mesh: &BlenderGeometry, half_space: &HalfSpace) -> BlenderGeometry {
+fn extrude_edge(
+    v1: &Point3D,
+    v2: &Point3D,
+    mesh: &mut BlenderGeometry,
+    accum: &mut RingAccumulator,
+    hippo: bool,
+    z0: f32,
+) {
+    let Point3D {
+        x: x1,
+        y: y1,
+        z: z1,
+        ..
+    } = *v1;
+
+    let Point3D {
+        x: x2,
+        y: y2,
+        // z: z2,
+        ..
+    } = *v2;
+
+    let clockwise = is_clockwise((x1, y1), (x2, y2));
+
+    let v3 = Point3D::new(x1, y1, z0);
+    let v4 = Point3D::new(x2, y2, z0);
+
+    let (v1, v2, v3, v4) = if hippo != clockwise {
+        (v1, v2, v3, v4)
+    } else {
+        (v2, v1, v4, v3)
+    };
+
+    accum.absorb(v4, v3); // this affects the order of the final ring
+
+    let mut new_face = vec![*v2, *v1];
+    if !mesh.close_enough(&v3, v1) {
+        new_face.push(v3)
+    }
+    if !mesh.close_enough(&v4, v2) && !mesh.close_enough(&v3, &v4) {
+        new_face.push(v4)
+    }
+
+    if new_face.len() > 2 {
+        mesh.add_face(new_face.as_slice())
+    }
+}
+
+pub fn clip(mesh: &BlenderGeometry, half_space: &HalfSpace) -> BlenderGeometry {
     let mut rval = BlenderGeometry::new();
 
     for face in mesh.face_iter() {

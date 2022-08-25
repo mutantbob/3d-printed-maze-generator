@@ -37,7 +37,7 @@ pub type Point3Ds = euclid::Point3D<f32, ()>;
 pub type Vector3Ds = Vector3D<f32, ()>;
 
 fn main() {
-    match 4 {
+    match 2 {
         2 => {
             let _ = craft_hex_maze_1("/tmp/x.svg", "/tmp/geom-hex.py");
         }
@@ -84,20 +84,16 @@ pub fn craft_hex_maze_1(svg_fname: &str, blender_fname_py: &str) -> Result<(), s
     };
 
     let prescale_top_z = topology.maximum_y() + 1.5;
-    let bottom_z = cylindrical.scale_z(-3.0);
+    let bottom_z = -11.0;
     let maze_dimensions = MazeDimensions {
         inner_radius: 7.5,
         groove_radius: groove_r,
         maze_outer_radius: shell_r,
         bottom_z: bottom_z,
-        top_z: if true {
-            61.0
-        } else {
-            cylindrical.scale_z(prescale_top_z)
-        },
-        pocket_z: bottom_z + 2.0,
-        grip_top: -10.6055,
-        cap_outer_radius: shell_r + 3.0,
+        top_z: 61.0,
+        pocket_z: -9.0,
+        grip_top: -7.0,
+        cap_outer_radius: 12.0,
     };
 
     craft_hex_maze(

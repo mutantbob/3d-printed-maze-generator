@@ -1,6 +1,7 @@
 extern crate core;
 
 use crate::cut::HalfSpace;
+use crate::cylinder_shell::ShellDimensions;
 use crate::walls::{add_edge_flat, add_wall, compute_walls};
 use blender_geometry::BlenderGeometry;
 use euclid::Vector3D;
@@ -22,6 +23,7 @@ use walls::{CorridorPolygons, WallPolygons};
 
 mod blender_geometry;
 mod cut;
+mod cylinder_shell;
 mod experiments;
 mod hexagonal;
 mod maze;
@@ -37,7 +39,7 @@ pub type Point3Ds = euclid::Point3D<f32, ()>;
 pub type Vector3Ds = Vector3D<f32, ()>;
 
 fn main() {
-    match 2 {
+    match 6 {
         2 => {
             let _ = craft_hex_maze_1("/tmp/x.svg", "/tmp/geom-hex.py");
         }
@@ -47,10 +49,45 @@ fn main() {
         4 => {
             let _ = craft_square_maze_1("/tmp/square.svg", "/tmp/geom-sq.py");
         }
+        5 => {
+            let _ = craft_shells();
+        }
+        6 => {
+            check_pin_mesh().unwrap();
+        }
         _ => {
             let _ = experiments::svg_check();
         }
     }
+}
+
+fn check_pin_mesh() -> Result<(), std::io::Error> {
+    let mesh = cylinder_shell::pin_slices((14.0, 12.0), 4.5, 0.4, 0.1);
+
+    let fname = "/tmp/pin.py";
+    let mut f = File::create(fname)?;
+    // f.write_fmt()
+    std::io::Write::write(&mut f, mesh.generate_script_for_3_1("pin1").as_bytes())?;
+    println!("wrote {}", fname);
+
+    Ok(())
+}
+
+pub fn craft_shells() -> Result<(), std::io::Error> {
+    let mesh = cylinder_shell::make_cylinder_shell(&ShellDimensions {
+        angular_resolution: 12 * 4,
+        outer_radius: 13.0,
+        inner_radius: 11.0,
+        overall_length: 61.0 + 11.0 + 2.0,
+        cap_thickness: 2.0,
+    });
+
+    let fname = "/tmp/shell1.py";
+    let mut f = File::create(fname)?;
+    // f.write_fmt()
+    std::io::Write::write(&mut f, mesh.generate_script_for_3_1("shell1").as_bytes())?;
+    println!("wrote {}", fname);
+    Ok(())
 }
 
 pub struct MazeDimensions {
@@ -283,7 +320,7 @@ where
     // println!("epsilon = {:?}", blender.epsilon);
 
     let mut f = File::create(fname)?;
-    blender.emit(&mut f)?;
+    f.write_all(blender.generate_script_for_3_1("mesh").as_bytes())?;
 
     println!("wrote {}", fname);
     Ok(())
@@ -293,7 +330,7 @@ fn finish_cylinder(mesh: BlenderGeometry, maze_dimensions: &MazeDimensions) -> B
     let bottom_z = maze_dimensions.bottom_z;
     let top_z = maze_dimensions.top_z;
 
-    let mut mesh = clip(
+    let mesh = clip(
         &mesh,
         &HalfSpace {
             v0: Point3Ds::new(0.0, 0.0, top_z),

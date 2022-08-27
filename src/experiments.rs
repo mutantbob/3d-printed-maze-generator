@@ -22,7 +22,7 @@ pub fn check_blender_math(fname: &str) -> Result<(), std::io::Error> {
         10.0,
     );
 
-    blender.emit(&mut f)?;
+    f.write_all(blender.as_python().as_bytes())?;
 
     Ok(())
 }

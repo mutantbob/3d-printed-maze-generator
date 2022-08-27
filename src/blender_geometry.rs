@@ -1,5 +1,4 @@
 use crate::Point3Ds;
-use std::io::Write;
 
 #[derive(Default)]
 pub struct BlenderGeometry {
@@ -15,9 +14,12 @@ impl BlenderGeometry {
         BlenderGeometry::default()
     }
 
-    pub fn add_face(&mut self, vertices: &[Point3Ds]) {
+    pub fn add_face<'a, I>(&mut self, vertices: I)
+    where
+        I: IntoIterator<Item = &'a Point3Ds>,
+    {
         let indices = vertices
-            .iter()
+            .into_iter()
             .map(|xyz| self.get_or_create_vertex_index(xyz))
             .collect();
         self.faces.push(indices);
@@ -44,7 +46,13 @@ impl BlenderGeometry {
             .map(|(idx, _)| idx)
     }
 
-    pub fn emit(&self, sink: &mut dyn Write) -> Result<(), std::io::Error> {
+    pub fn as_python(&self) -> String {
+        let mut rval = String::new();
+        self.emit_python(&mut rval).unwrap();
+        rval
+    }
+
+    pub fn emit_python(&self, sink: &mut dyn std::fmt::Write) -> Result<(), std::fmt::Error> {
         writeln!(sink, "vertices = [")?;
 
         for vertex in &self.vertices {
@@ -94,5 +102,31 @@ impl BlenderGeometry {
 
     pub fn face_count(&self) -> usize {
         self.faces.len()
+    }
+
+    pub fn generate_script_for_3_1(&self, mesh_name: &str) -> String {
+        format!(
+            r#"import bpy
+
+{}
+
+name = "{}"
+mesh = bpy.data.meshes.new(name)
+mesh.from_pydata(vertices, [] , faces)
+
+obj = bpy.data.objects.get(name)
+if obj is None:
+  obj = bpy.data.objects.new(name, mesh)
+else:
+  obj.data = mesh
+
+try:
+  bpy.context.scene.collection.objects.link(obj)
+except:
+  pass
+"#,
+            self.as_python(),
+            mesh_name
+        )
     }
 }

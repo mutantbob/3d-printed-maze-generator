@@ -77,7 +77,7 @@ pub fn craft_shells() -> Result<(), std::io::Error> {
     let cap_thickness = 2.0;
     let overall_length = 61.0 + 11.0 + cap_thickness;
     let mesh = cylinder_shell::make_cylinder_shell(&ShellDimensions {
-        angular_resolution: 12 * 4,
+        angular_resolution: 2 * 12 * 4,
         outer_radius: 13.0,
         inner_radius: 11.0,
         overall_length,

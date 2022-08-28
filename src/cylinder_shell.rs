@@ -78,6 +78,7 @@ impl Iterator for QuantizedYIterator {
 
 //
 
+#[derive(Debug)]
 pub struct VerticalRectangle {
     x1: f32,
     y1: f32,
@@ -171,6 +172,7 @@ pub fn make_cylinder_shell(dimensions: &ShellDimensions) -> BlenderGeometry {
         rval.add_face(&face);
     }
     {
+        // the inner surface of the cylinder is complicated by a conical pin
         let pin = ConeXAxis {
             tip_x: dimensions.inner_radius - dimensions.pin_length,
             tip_z: dimensions.pin_tip_z,
@@ -242,7 +244,7 @@ pub fn maybe_subdivide_for_pin(
             })
             .collect();
 
-        if beaver_alpha {
+        if !beaver_dos {
             let mut new_face = vec![
                 Point3Ds::new(face.x1, face.y1, face.z_high),
                 Point3Ds::new(face.x2, face.y2, face.z_high),
@@ -270,7 +272,7 @@ pub fn maybe_subdivide_for_pin(
             }
 
             rval.push(new_face);
-        } else if beaver_dos {
+        } else if !beaver_alpha {
             let mut new_face = vec![
                 Point3Ds::new(face.x2, face.y2, face.z_low),
                 Point3Ds::new(face.x1, face.y1, face.z_low),
@@ -299,20 +301,29 @@ pub fn maybe_subdivide_for_pin(
 
             rval.push(new_face);
         } else if z1 > face.z_low {
-            let mut new_face = vec![
-                Point3Ds::new(face.x1, face.y1, z1),
-                Point3Ds::new(face.x1, face.y1, face.z_low),
+            let mut low_face = vec![
                 Point3Ds::new(face.x2, face.y2, face.z_low),
-                Point3Ds::new(face.x2, face.y2, z1),
+                Point3Ds::new(face.x1, face.y1, face.z_low),
             ];
 
             for y in QuantizedYIterator::new(face.y1, face.y2, xz_resolution) {
                 let x = face.interpolate_x(y);
 
-                new_face.push(Point3Ds::new(x, y, z1));
+                low_face.push(Point3Ds::new(x, y, z1));
             }
 
-            rval.push(new_face);
+            rval.push(low_face);
+            //
+            let mut high_face = vec![
+                Point3Ds::new(face.x1, face.y1, face.z_high),
+                Point3Ds::new(face.x2, face.y2, face.z_high),
+            ];
+
+            for y in QuantizedYIterator::new(face.y2, face.y1, xz_resolution) {
+                let x = face.interpolate_x(y);
+                high_face.push(Point3Ds::new(x, y, z2));
+            }
+            rval.push(high_face);
         }
 
         if true {

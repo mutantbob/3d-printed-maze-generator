@@ -39,7 +39,7 @@ pub type Point3Ds = euclid::Point3D<f32, ()>;
 pub type Vector3Ds = Vector3D<f32, ()>;
 
 fn main() {
-    match 6 {
+    match 5 {
         2 => {
             let _ = craft_hex_maze_1("/tmp/x.svg", "/tmp/geom-hex.py");
         }
@@ -74,12 +74,17 @@ fn check_pin_mesh() -> Result<(), std::io::Error> {
 }
 
 pub fn craft_shells() -> Result<(), std::io::Error> {
+    let cap_thickness = 2.0;
+    let overall_length = 61.0 + 11.0 + cap_thickness;
     let mesh = cylinder_shell::make_cylinder_shell(&ShellDimensions {
         angular_resolution: 12 * 4,
         outer_radius: 13.0,
         inner_radius: 11.0,
-        overall_length: 61.0 + 11.0 + 2.0,
-        cap_thickness: 2.0,
+        overall_length,
+        cap_thickness,
+        pin_length: 2.0,
+        pin_tip_z: overall_length - 4.0,
+        pin_slope: 0.5,
     });
 
     let fname = "/tmp/shell1.py";
@@ -120,13 +125,13 @@ pub fn craft_hex_maze_1(svg_fname: &str, blender_fname_py: &str) -> Result<(), s
         max_rho: topology.maximum_x(),
     };
 
-    let prescale_top_z = topology.maximum_y() + 1.5;
+    // let prescale_top_z = topology.maximum_y() + 1.5;
     let bottom_z = -11.0;
     let maze_dimensions = MazeDimensions {
         inner_radius: 7.5,
         groove_radius: groove_r,
         maze_outer_radius: shell_r,
-        bottom_z: bottom_z,
+        bottom_z,
         top_z: 61.0,
         pocket_z: -9.0,
         grip_top: -7.0,
@@ -204,7 +209,7 @@ pub fn craft_square_maze_1(fname: &str, blender_fname_py: &str) -> Result<(), st
         inner_radius: 12.5,
         groove_radius: 14.0,
         maze_outer_radius: 16.0,
-        bottom_z: bottom_z,
+        bottom_z,
         top_z: if true {
             68.05
         } else {
@@ -520,7 +525,7 @@ fn is_clockwise((x1, y1): (f32, f32), (x2, y2): (f32, f32)) -> bool {
 
 fn finish_cylinder_top(
     mesh: &mut BlenderGeometry,
-    outer_ring: &Vec<Point3Ds>,
+    outer_ring: &[Point3Ds],
     core_radius: f32,
     high_z: f32,
     pocket_z: f32,

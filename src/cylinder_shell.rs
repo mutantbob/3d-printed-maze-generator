@@ -178,25 +178,42 @@ pub fn make_cylinder_shell(dimensions: &ShellDimensions) -> BlenderGeometry {
             tip_z: dimensions.pin_tip_z,
             dy_dx: dimensions.pin_slope,
         };
-        let yz_radius = dimensions.pin_slope * dimensions.pin_length;
-        for face in rings_to_quads(&cap_ring_inner, &top_ring_inner) {
-            let vr = VerticalRectangle {
-                // this only works because of how these quads are built
-                x1: face[0].x,
-                y1: face[0].y,
-                z_high: dimensions.overall_length,
-                z_low: dimensions.cap_thickness,
-                x2: face[2].x,
-                y2: face[2].y,
-            };
-            for face2 in maybe_subdivide_for_pin(vr, &pin, 0.1, yz_radius) {
-                rval.add_face(&face2)
-            }
-        }
+        interior_faces_with_pin(
+            dimensions,
+            &cap_ring_inner,
+            &top_ring_inner,
+            &mut rval,
+            &pin,
+        )
     }
     rval.add_face(&cap_ring_inner);
 
     rval
+}
+
+/// the interior of the cylinder, modified with a conical pin that the player maneuvers through the maze
+pub fn interior_faces_with_pin(
+    dimensions: &ShellDimensions,
+    cap_ring_inner: &Vec<Point3Ds>,
+    top_ring_inner: &Vec<Point3Ds>,
+    rval: &mut BlenderGeometry,
+    pin: &ConeXAxis,
+) {
+    let yz_radius = dimensions.pin_slope * dimensions.pin_length;
+    for face in rings_to_quads(&cap_ring_inner, &top_ring_inner) {
+        let vr = VerticalRectangle {
+            // this only works because of how these quads are built
+            x1: face[0].x,
+            y1: face[0].y,
+            z_high: dimensions.overall_length,
+            z_low: dimensions.cap_thickness,
+            x2: face[2].x,
+            y2: face[2].y,
+        };
+        for face2 in maybe_subdivide_for_pin(vr, &pin, 0.1, yz_radius) {
+            rval.add_face(&face2)
+        }
+    }
 }
 
 pub fn rings_to_quads(a: &[Point3Ds], b: &[Point3Ds]) -> Vec<Vec<Point3Ds>> {

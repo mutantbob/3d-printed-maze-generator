@@ -201,13 +201,13 @@ pub fn make_cylinder_shell(dimensions: &ShellDimensions) -> BlenderGeometry {
 /// the interior of the cylinder, modified with a conical pin that the player maneuvers through the maze
 pub fn interior_faces_with_pin(
     dimensions: &ShellDimensions,
-    cap_ring_inner: &Vec<Point3Ds>,
-    top_ring_inner: &Vec<Point3Ds>,
+    cap_ring_inner: &[Point3Ds],
+    top_ring_inner: &[Point3Ds],
     rval: &mut BlenderGeometry,
     pin: &ConeXAxis,
 ) {
     let yz_radius = dimensions.pin_slope * dimensions.pin_length;
-    for face in rings_to_quads(&cap_ring_inner, &top_ring_inner) {
+    for face in rings_to_quads(cap_ring_inner, top_ring_inner) {
         let vr = VerticalRectangle {
             // this only works because of how these quads are built
             x1: face[0].x,
@@ -217,7 +217,7 @@ pub fn interior_faces_with_pin(
             x2: face[2].x,
             y2: face[2].y,
         };
-        for face2 in maybe_subdivide_for_pin(vr, &pin, 0.1, yz_radius) {
+        for face2 in maybe_subdivide_for_pin(vr, pin, 0.1, yz_radius) {
             rval.add_face(&face2)
         }
     }

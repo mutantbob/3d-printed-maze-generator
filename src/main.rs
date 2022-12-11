@@ -2,6 +2,7 @@ extern crate core;
 
 use crate::cut::HalfSpace;
 use crate::cylinder_shell::ShellDimensions;
+use crate::maze::{DeepBoundaryPicker, SimpleBoundaryPicker};
 use crate::walls::{add_edge_flat, add_wall, compute_walls};
 use blender_geometry::BlenderGeometry;
 use euclid::Vector3D;
@@ -39,21 +40,38 @@ pub type Point3Ds = euclid::Point3D<f32, ()>;
 pub type Vector3Ds = Vector3D<f32, ()>;
 
 fn main() {
-    match 5 {
+    match 41 {
         2 => {
-            let _ = craft_hex_maze_1("/tmp/x.svg", "/tmp/geom-hex.py");
+            let mut rng = ChaCha8Rng::from_seed([7; 32]);
+            let _ = craft_hex_maze_1("/tmp/x.svg", "/tmp/geom-hex.py", &mut rng);
         }
         3 => {
             let _ = experiments::check_blender_math("/tmp/x.py");
         }
         4 => {
-            let _ = craft_square_maze_1("/tmp/square.svg", "/tmp/geom-sq.py");
+            let mut rng = ChaCha8Rng::from_seed([7; 32]);
+            let _ = craft_square_maze_1("/tmp/square.svg", "/tmp/geom-sq.py", &mut rng);
         }
         5 => {
             let _ = craft_shells();
         }
         6 => {
             check_pin_mesh().unwrap();
+        }
+        7 => {
+            let _ = craft_ring();
+        }
+        40 => {
+            let mut rng = ChaCha8Rng::from_seed([10; 32]);
+            let _ = craft_square_maze_1("/tmp/square10.svg", "/tmp/geom-sq10.py", &mut rng);
+        }
+        41 => {
+            let mut rng = ChaCha8Rng::from_seed([11; 32]);
+            let _ = craft_square_maze_1("/tmp/square11.svg", "/tmp/geom-sq11.py", &mut rng);
+        }
+        42 => {
+            let mut rng = ChaCha8Rng::from_seed([12; 32]);
+            let _ = craft_square_maze_1("/tmp/square12.svg", "/tmp/geom-sq12.py", &mut rng);
         }
         _ => {
             let _ = experiments::svg_check();
@@ -95,6 +113,28 @@ pub fn craft_shells() -> Result<(), std::io::Error> {
     Ok(())
 }
 
+pub fn craft_ring() -> Result<(), std::io::Error> {
+    let dimensions = ShellDimensions {
+        angular_resolution: 180,
+        outer_radius: 19.0,
+        inner_radius: 32.5 / 2.0,
+        overall_length: 8.0,
+        cap_thickness: 0.0,
+        pin_length: 1.5,
+        pin_tip_z: 4.0,
+        pin_slope: 6.8 / 2.0 / 3.9,
+    };
+
+    let mesh = cylinder_shell::make_cylinder_shell(&dimensions);
+
+    let fname = "/tmp/ring1.py";
+    let mut f = File::create(fname)?;
+    // f.write_fmt()
+    std::io::Write::write(&mut f, mesh.generate_script_for_3_1("ring1").as_bytes())?;
+    println!("wrote {}", fname);
+    Ok(())
+}
+
 pub struct MazeDimensions {
     /// the inner void where you hide the prize
     inner_radius: f32,
@@ -114,7 +154,11 @@ pub struct MazeDimensions {
     cap_outer_radius: f32,
 }
 
-pub fn craft_hex_maze_1(svg_fname: &str, blender_fname_py: &str) -> Result<(), std::io::Error> {
+pub fn craft_hex_maze_1<R: rand::Rng>(
+    svg_fname: &str,
+    blender_fname_py: &str,
+    rng: &mut R,
+) -> Result<(), std::io::Error> {
     let topology = HexMazeTopology::new(14, 14);
 
     let shell_r = 10.0;
@@ -142,17 +186,17 @@ pub fn craft_hex_maze_1(svg_fname: &str, blender_fname_py: &str) -> Result<(), s
         svg_fname,
         blender_fname_py,
         topology,
-        ChaCha8Rng::from_seed([7; 32]),
+        rng,
         cylindrical,
         maze_dimensions,
     )
 }
 
-pub fn craft_hex_maze(
+pub fn craft_hex_maze<R: rand::Rng>(
     fname: &str,
     blender_fname_py: &str,
     topology1: HexMazeTopology,
-    mut rng: ChaCha8Rng,
+    rng: &mut R,
     cylindrical: CylindricalSpace,
     maze_dimensions: MazeDimensions,
 ) -> Result<(), std::io::Error> {
@@ -166,11 +210,13 @@ pub fn craft_hex_maze(
     };
     let mut edges: Vec<_> = generator
         .generate_edges(
-            &mut rng,
+            rng,
             start,
             |cell| topology1.neighbors(cell),
             finisher,
             eligible_to_finish,
+            // SimpleBoundaryPicker {}
+            DeepBoundaryPicker { myopia: 5 },
         )
         .into_iter()
         // .map(|(c1, c2)| Edge::<HexCellAddress>(c1, c2))
@@ -198,7 +244,11 @@ pub fn craft_hex_maze(
     Ok(())
 }
 
-pub fn craft_square_maze_1(fname: &str, blender_fname_py: &str) -> Result<(), std::io::Error> {
+pub fn craft_square_maze_1<R: rand::Rng>(
+    fname: &str,
+    blender_fname_py: &str,
+    rng: &mut R,
+) -> Result<(), std::io::Error> {
     let topology = SquareMazeTopology::new(14, 11);
     let max_rho = topology.maximum_x();
 
@@ -224,17 +274,17 @@ pub fn craft_square_maze_1(fname: &str, blender_fname_py: &str) -> Result<(), st
         fname,
         blender_fname_py,
         topology,
-        ChaCha8Rng::from_seed([7; 32]),
+        rng,
         cylindrical,
         maze_dimensions,
     )
 }
 
-pub fn draw_square_maze(
+pub fn draw_square_maze<R: rand::Rng>(
     fname: &str,
     blender_fname_py: &str,
     topology: SquareMazeTopology,
-    mut rng: ChaCha8Rng,
+    rng: &mut R,
     cylindrical: CylindricalSpace,
     maze_dimensions: MazeDimensions,
 ) -> Result<(), std::io::Error> {
@@ -243,11 +293,12 @@ pub fn draw_square_maze(
     let start = SqCellAddress::new(0, 0);
     let mut edges: Vec<_> = generator
         .generate_edges(
-            &mut rng,
+            rng,
             start,
             |cell| topology.neighbors(cell),
             Some(|end: &SqCellAddress| SqCellAddress::new(end.u, end.v + 1)),
             |cell| cell.v + 1 >= topology.v_count as i32,
+            SimpleBoundaryPicker {}, // DeepBoundaryPicker { myopia: 10 }
         )
         .into_iter()
         // .map(|(c1, c2)| Edge(c1, c2))

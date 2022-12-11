@@ -164,7 +164,15 @@ pub fn make_cylinder_shell(dimensions: &ShellDimensions) -> BlenderGeometry {
 
     let mut rval = BlenderGeometry::new();
 
-    rval.add_face(cap_ring_outer.iter().rev());
+    if dimensions.cap_thickness > 0.0 {
+        rval.add_face(cap_ring_outer.iter().rev());
+        rval.add_face(&cap_ring_inner);
+    } else {
+        for face in rings_to_quads(&cap_ring_inner, &cap_ring_outer) {
+            rval.add_face(&face);
+        }
+    }
+
     for face in rings_to_quads(&top_ring_outer, &cap_ring_outer) {
         rval.add_face(&face);
     }
@@ -186,7 +194,6 @@ pub fn make_cylinder_shell(dimensions: &ShellDimensions) -> BlenderGeometry {
             &pin,
         )
     }
-    rval.add_face(&cap_ring_inner);
 
     rval
 }

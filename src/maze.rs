@@ -22,13 +22,14 @@ where
         }
     }
 
-    pub fn generate_edges<FN, F2, F3, I>(
+    pub fn generate_edges<FN, F2, F3, I, R>(
         mut self,
-        rng: &mut impl Rng,
+        rng: &mut R,
         start: T,
         neighbors: FN,
         finisher: Option<F2>,
         eligible_to_finish: F3,
+        boundary_picker: impl BoundaryPicker<T, R>,
     ) -> Vec<Edge<T>>
     where
         FN: Fn(&T) -> I,
@@ -36,6 +37,7 @@ where
         T: Clone,
         F2: Fn(&T) -> T,
         F3: Fn(&T) -> bool,
+        R: Rng,
     {
         self.boundary.push(start.clone());
 
@@ -44,7 +46,8 @@ where
             if self.boundary.is_empty() {
                 break;
             }
-            let idx = rng.gen_range(0..self.boundary.len());
+            // let idx = rng.gen_range(0..self.boundary.len());
+            let idx = boundary_picker.pick(rng, &self.boundary);
             let item = self.boundary.remove(idx);
             let mut candidates = vec![];
             let neighbors: Vec<_> = neighbors(&item)
@@ -150,7 +153,7 @@ where
         I: IntoIterator<Item = (T2, C)>,
         F: Fn(C, C) -> Ordering,
         T2: Clone,
-        C: Copy,
+        C: Copy + Debug,
     {
         let mut low_cost = None;
         let mut candidates = Vec::new();
@@ -185,5 +188,49 @@ where
             .into_iter()
             .map(Clone::clone)
             .collect()
+    }
+}
+
+//
+
+pub trait BoundaryPicker<T, R> {
+    fn pick(&self, rng: &mut R, boundary: &[T]) -> usize;
+}
+
+//
+
+pub struct SimpleBoundaryPicker {}
+
+impl<T, R> BoundaryPicker<T, R> for SimpleBoundaryPicker
+where
+    R: Rng,
+{
+    fn pick(&self, rng: &mut R, boundary: &[T]) -> usize
+    where
+        R: Rng,
+    {
+        rng.gen_range(0..boundary.len())
+    }
+}
+
+pub struct DeepBoundaryPicker {
+    pub myopia: usize,
+}
+
+impl<T, R> BoundaryPicker<T, R> for DeepBoundaryPicker
+where
+    R: Rng,
+{
+    fn pick(&self, rng: &mut R, boundary: &[T]) -> usize
+    where
+        R: Rng,
+    {
+        let min = if self.myopia > boundary.len() {
+            0
+        } else {
+            boundary.len() - self.myopia
+        };
+        // println!("{}..{}", min, boundary.len());
+        rng.gen_range(min..boundary.len())
     }
 }

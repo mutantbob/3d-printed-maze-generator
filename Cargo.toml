@@ -19,6 +19,7 @@ rand = "*"
 assert_approx_eq = "*"
 rand_chacha = "*"
 euclid={version="*"}
+configparser = "3.0.2"
 
 [dev-dependencies]
 approx="*"

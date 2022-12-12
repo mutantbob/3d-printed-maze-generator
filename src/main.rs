@@ -5,6 +5,7 @@ use crate::cylinder_shell::ShellDimensions;
 use crate::maze::{DeepBoundaryPicker, SimpleBoundaryPicker};
 use crate::walls::{add_edge_flat, add_wall, compute_walls};
 use blender_geometry::BlenderGeometry;
+use configparser::ini::Ini;
 use euclid::Vector3D;
 use hexagonal::{HexCellAddress, HexMazeTopology};
 use rand::SeedableRng;
@@ -40,17 +41,17 @@ pub type Point3Ds = euclid::Point3D<f32, ()>;
 pub type Vector3Ds = Vector3D<f32, ()>;
 
 fn main() {
-    match 41 {
+    match 8 {
         2 => {
             let mut rng = ChaCha8Rng::from_seed([7; 32]);
-            let _ = craft_hex_maze_1("/tmp/x.svg", "/tmp/geom-hex.py", &mut rng);
+            let _ = craft_hex_maze_1("/tmp/x.svg", "/tmp/geom-hex.py", &mut rng, "hex7");
         }
         3 => {
             let _ = experiments::check_blender_math("/tmp/x.py");
         }
         4 => {
             let mut rng = ChaCha8Rng::from_seed([7; 32]);
-            let _ = craft_square_maze_1("/tmp/square.svg", "/tmp/geom-sq.py", &mut rng);
+            let _ = craft_square_maze_1("/tmp/square.svg", "/tmp/geom-sq.py", &mut rng, "square7");
         }
         5 => {
             let _ = craft_shells();
@@ -61,20 +62,50 @@ fn main() {
         7 => {
             let _ = craft_ring();
         }
-        40 => {
-            let mut rng = ChaCha8Rng::from_seed([10; 32]);
-            let _ = craft_square_maze_1("/tmp/square10.svg", "/tmp/geom-sq10.py", &mut rng);
-        }
-        41 => {
-            let mut rng = ChaCha8Rng::from_seed([11; 32]);
-            let _ = craft_square_maze_1("/tmp/square11.svg", "/tmp/geom-sq11.py", &mut rng);
-        }
-        42 => {
-            let mut rng = ChaCha8Rng::from_seed([12; 32]);
-            let _ = craft_square_maze_1("/tmp/square12.svg", "/tmp/geom-sq12.py", &mut rng);
+        8 => {
+            let args: Vec<_> = std::env::args().collect();
+            let fname = match args.get(1) {
+                Some(val) => val,
+                None => "/home/thoth/art/2022/hex-maze-3dprint/sample-config.txt",
+            };
+            println!("{}", fname);
+            let mut config = Ini::new();
+            config.load(fname).unwrap();
+
+            craft_maze_from_config(&mut config);
         }
         _ => {
             let _ = experiments::svg_check();
+        }
+    }
+}
+
+fn craft_maze_from_config(config: &mut Ini) {
+    let mut rng = ChaCha8Rng::from_seed(convert_to_seed(config.get("rng", "seed")));
+
+    let svg_fname = config
+        .get("output", "svg fname")
+        .unwrap_or_else(|| "/tmp/square.svg".into());
+    let blender_fname = config
+        .get("output", "blender fname")
+        .unwrap_or_else(|| "/tmp/geom-sq.py".into());
+    let mesh_name = config
+        .get("output", "mesh name")
+        .unwrap_or_else(|| "square".into());
+
+    craft_square_maze_2(&svg_fname, &blender_fname, &mut rng, &mesh_name, config).unwrap();
+}
+
+fn convert_to_seed<const N: usize>(config_value: Option<String>) -> [u8; N] {
+    match config_value {
+        None => [7; N],
+        Some(val) => {
+            let mut rval = [0; N];
+            for (cursor, dst) in rval.iter_mut().enumerate() {
+                let ptr = 2 * (cursor % (val.len() / 2));
+                *dst = u8::from_str_radix(&val[ptr..(ptr + 2)], 16).unwrap();
+            }
+            rval
         }
     }
 }
@@ -158,6 +189,7 @@ pub fn craft_hex_maze_1<R: rand::Rng>(
     svg_fname: &str,
     blender_fname_py: &str,
     rng: &mut R,
+    mesh_name: &str,
 ) -> Result<(), std::io::Error> {
     let topology = HexMazeTopology::new(14, 14);
 
@@ -189,6 +221,7 @@ pub fn craft_hex_maze_1<R: rand::Rng>(
         rng,
         cylindrical,
         maze_dimensions,
+        mesh_name,
     )
 }
 
@@ -199,6 +232,7 @@ pub fn craft_hex_maze<R: rand::Rng>(
     rng: &mut R,
     cylindrical: CylindricalSpace,
     maze_dimensions: MazeDimensions,
+    mesh_name: &str,
 ) -> Result<(), std::io::Error> {
     let generator = maze::MazeGenerator::new();
 
@@ -239,6 +273,7 @@ pub fn craft_hex_maze<R: rand::Rng>(
         &walls,
         &cylindrical,
         &maze_dimensions,
+        mesh_name,
     )?;
 
     Ok(())
@@ -248,6 +283,7 @@ pub fn craft_square_maze_1<R: rand::Rng>(
     fname: &str,
     blender_fname_py: &str,
     rng: &mut R,
+    mesh_name: &str,
 ) -> Result<(), std::io::Error> {
     let topology = SquareMazeTopology::new(14, 11);
     let max_rho = topology.maximum_x();
@@ -277,7 +313,57 @@ pub fn craft_square_maze_1<R: rand::Rng>(
         rng,
         cylindrical,
         maze_dimensions,
+        mesh_name,
     )
+}
+
+pub fn craft_square_maze_2<R: rand::Rng>(
+    fname: &str,
+    blender_fname_py: &str,
+    rng: &mut R,
+    mesh_name: &str,
+    config: &Ini,
+) -> Result<(), std::io::Error> {
+    let topology = SquareMazeTopology::new(14, 11);
+    let max_rho = topology.maximum_x();
+
+    let cylindrical = CylindricalSpace { r0: 14.0, max_rho };
+
+    let maze_dimensions = maze_dimensions_for(config).unwrap();
+
+    draw_square_maze(
+        fname,
+        blender_fname_py,
+        topology,
+        rng,
+        cylindrical,
+        maze_dimensions,
+        mesh_name,
+    )
+}
+
+fn config_expect_maze_dimension(config: &Ini, key: &str) -> Result<f32, String> {
+    config
+        .getfloat("maze dimensions", key)
+        .map(|v| v.unwrap_or_else(|| panic!("missing {}", key)) as f32)
+}
+
+fn maze_dimensions_for(config: &Ini) -> Result<MazeDimensions, String> {
+    let bottom_z = config_expect_maze_dimension(config, "bottom z")?;
+
+    let maze_dimensions = MazeDimensions {
+        inner_radius: config_expect_maze_dimension(config, "inner radius")?,
+        groove_radius: config_expect_maze_dimension(config, "groove radius")?,
+        maze_outer_radius: config_expect_maze_dimension(config, "maze outer radius")?,
+        bottom_z,
+        top_z: config_expect_maze_dimension(config, "top z")?,
+        pocket_z: config
+            .getfloat("maze dimensions", "pocket z")?
+            .unwrap_or(bottom_z as f64 + 2.0) as f32,
+        grip_top: config_expect_maze_dimension(config, "grip top")?,
+        cap_outer_radius: config_expect_maze_dimension(config, "cap outer radius")?,
+    };
+    Ok(maze_dimensions)
 }
 
 pub fn draw_square_maze<R: rand::Rng>(
@@ -287,6 +373,7 @@ pub fn draw_square_maze<R: rand::Rng>(
     rng: &mut R,
     cylindrical: CylindricalSpace,
     maze_dimensions: MazeDimensions,
+    mesh_name: &str,
 ) -> Result<(), std::io::Error> {
     let generator = maze::MazeGenerator::new();
 
@@ -318,6 +405,7 @@ pub fn draw_square_maze<R: rand::Rng>(
         &walls,
         &cylindrical,
         &maze_dimensions,
+        mesh_name,
     )?;
 
     Ok(())
@@ -366,6 +454,7 @@ pub fn write_blender_python<CA: CellAddress>(
     walls: &[MazeWall<CA>],
     cylindrical: &CylindricalSpace,
     maze_dimensions: &MazeDimensions,
+    mesh_name: &str,
 ) -> Result<(), std::io::Error>
 where
     Edge<CA>: EdgeCornerMapping<CA> + CorridorPolygons<CylindricalSpace>,
@@ -376,7 +465,7 @@ where
     // println!("epsilon = {:?}", blender.epsilon);
 
     let mut f = File::create(fname)?;
-    f.write_all(blender.generate_script_for_3_1("mesh").as_bytes())?;
+    f.write_all(blender.generate_script_for_3_1(mesh_name).as_bytes())?;
 
     println!("wrote {}", fname);
     Ok(())

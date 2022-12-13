@@ -1,7 +1,12 @@
 use crate::hexagonal::{HexCellAddress, HexMazeTopology};
+use crate::polygon_split::subdivide_faces;
 use crate::ring::RingAccumulator;
 use crate::tools::{with_r, CylindricalSpace, MazeWall, Space};
-use crate::{BlenderMapping, CellAddress, Edge, EdgeCornerMapping, Topology};
+use crate::walls::multi_face_to_blender;
+use crate::{
+    BlenderGeometry, BlenderMapping, CellAddress, CylindricalCoodinate, Edge, EdgeCornerMapping,
+    Topology, WallPolygons,
+};
 use assert_approx_eq::assert_approx_eq;
 
 #[test]
@@ -232,4 +237,70 @@ pub fn test_angle_compare() {
 
     assert!(!crate::a_cw_of_b(0.0, 6.0));
     assert!(crate::a_cw_of_b(0.0, 0.0));
+}
+
+#[test]
+pub fn test_wall_polygons() {
+    let wall = MazeWall::new(
+        HexCellAddress::new(4, 2),
+        HexCellAddress::new(4, 1),
+        false,
+        false,
+        false,
+    );
+    let space = CylindricalSpace {
+        r0: 10.0,
+        max_rho: 80.0,
+    };
+    let radius_high = 10.0;
+    let radius_groove = 9.0;
+    let faces = wall.calculate_wall_polygons(&space, radius_high, radius_groove);
+
+    let mut geom = BlenderGeometry::new();
+    for face in faces {
+        geom.add_face(face.as_slice());
+    }
+}
+
+#[test]
+pub fn test_subdivide() {
+    let face1 = [
+        CylindricalCoodinate {
+            rho: 4.0,
+            r: 9.0,
+            z: 4.618802,
+        },
+        CylindricalCoodinate {
+            rho: 3.6666667,
+            r: 10.0,
+            z: 4.041452,
+        },
+        CylindricalCoodinate {
+            rho: 4.0000005,
+            r: 10.0,
+            z: 4.233902,
+        },
+    ];
+
+    let smaller = subdivide_faces(
+        [
+            face1.as_slice(),
+            // face2.as_slice(),
+            // face3.as_slice(),
+        ],
+        0.25,
+    );
+
+    let space = CylindricalSpace {
+        r0: 10.0,
+        max_rho: 80.0,
+    };
+    let smaller = multi_face_to_blender(&space, smaller);
+
+    println!("problem? {:#?}", smaller);
+
+    let mut geom = BlenderGeometry::new();
+    for face in smaller {
+        geom.add_face(face.as_slice());
+    }
 }

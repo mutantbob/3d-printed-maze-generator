@@ -193,7 +193,7 @@ where
     }
 }
 
-fn multi_face_to_blender<SPACE, I>(
+pub fn multi_face_to_blender<SPACE, I>(
     space: &SPACE,
     faces: impl IntoIterator<Item = I>,
 ) -> Vec<Vec<Point3Ds>>

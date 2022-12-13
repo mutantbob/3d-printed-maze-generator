@@ -18,11 +18,16 @@ impl BlenderGeometry {
     where
         I: IntoIterator<Item = &'a Point3Ds>,
     {
-        let indices = vertices
+        let indices: Vec<_> = vertices
             .into_iter()
             .map(|xyz| self.get_or_create_vertex_index(xyz))
             .collect();
-        self.faces.push(indices);
+        let indices = suppress_duplicate_vertex(&indices);
+        if BlenderGeometry::degenerate_face(&indices) {
+            eprintln!("suppressing degenerate face {:?}", &indices);
+        } else {
+            self.faces.push(indices);
+        }
     }
 
     fn get_or_create_vertex_index(&mut self, xyz: &Point3Ds) -> usize {
@@ -129,4 +134,36 @@ except:
             mesh_name
         )
     }
+
+    pub fn degenerate_face(face: &[usize]) -> bool {
+        if face.len() <= 2 {
+            return true;
+        }
+
+        for (i, v1) in face.iter().enumerate() {
+            for v2 in face[(i + 1)..].iter() {
+                if *v1 == *v2 {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+}
+
+fn suppress_duplicate_vertex(face: &[usize]) -> Vec<usize> {
+    let mut rval: Vec<usize> = vec![];
+    for (i, &vi) in face.iter().enumerate() {
+        let prev = if i > 0 {
+            face[i - 1]
+        } else {
+            *face.last().unwrap()
+        };
+        if vi == prev {
+            eprintln!("suppressing duplicate vertex {} in face", vi)
+        } else {
+            rval.push(vi);
+        }
+    }
+    rval
 }

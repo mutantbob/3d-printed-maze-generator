@@ -43,7 +43,7 @@ pub type Point3Ds = euclid::Point3D<f32, ()>;
 pub type Vector3Ds = Vector3D<f32, ()>;
 
 fn main() {
-    match 21 {
+    match 5 {
         2 => {
             let mut rng = ChaCha8Rng::from_seed([7; 32]);
             let _ = craft_hex_maze_1("/tmp/x.svg", "/tmp/geom-hex.py", &mut rng, "hex7");
@@ -56,7 +56,12 @@ fn main() {
             let _ = craft_square_maze_1("/tmp/square.svg", "/tmp/geom-sq.py", &mut rng, "square7");
         }
         5 => {
-            let _ = craft_shells();
+            let topology = SquareMazeTopology::new(14, 11);
+            let space = {
+                let max_rho = topology.maximum_x();
+                CylindricalSpace { r0: 14.0, max_rho }
+            };
+            let _ = craft_shells(&space);
         }
         6 => {
             check_pin_mesh().unwrap();
@@ -68,12 +73,17 @@ fn main() {
             let args: Vec<_> = std::env::args().collect();
             let fname = match args.get(1) {
                 Some(val) => val,
-                None => "/home/thoth/art/2022/hex-maze-3dprint/generator/sample-configs/sample-config.txt",
+                None => "/home/thoth/art/2022/hex-maze-3dprint/generator/sample-configs/sample-config.cfg",
             };
             println!("{}", fname);
             let config = MazeConfig::from_file(fname).unwrap();
 
-            craft_maze_from_config(&config);
+            let topology = SquareMazeTopology::new(14, 11);
+            let space = {
+                let max_rho = topology.maximum_x();
+                CylindricalSpace { r0: 14.0, max_rho }
+            };
+            craft_maze_from_config(&config, topology, space);
         }
         21 => {
             let args: Vec<_> = std::env::args().collect();
@@ -95,12 +105,16 @@ fn main() {
     }
 }
 
-fn craft_maze_from_config(config: &MazeConfig) {
+fn craft_maze_from_config(
+    config: &MazeConfig,
+    topology: SquareMazeTopology,
+    space: CylindricalSpace,
+) {
     let mut rng = config.rng();
 
     let output_names = config.output();
 
-    craft_square_maze_2(&output_names, &mut rng, &config.config).unwrap();
+    craft_square_maze_2(&output_names, &mut rng, &config.config, topology, space).unwrap();
 }
 
 fn convert_to_seed<const N: usize>(config_value: Option<String>) -> [u8; N] {
@@ -129,17 +143,31 @@ fn check_pin_mesh() -> Result<(), std::io::Error> {
     Ok(())
 }
 
-pub fn craft_shells() -> Result<(), std::io::Error> {
+pub fn craft_shells(space: &CylindricalSpace) -> Result<(), std::io::Error> {
+    let pin_z_adjust = {
+        let pre_start = square_maze_pre_start(SqCellAddress::new(0, 0));
+
+        let tmp = pre_start.coords_2d();
+        let cc = with_r(tmp, 1.0);
+        let xyz = space.to_blender(cc);
+        println!("{:?}", xyz);
+        let grip_top = -10.0;
+        println!("{}", xyz.z - grip_top);
+        xyz.z - grip_top
+    };
+
     let cap_thickness = 2.0;
-    let overall_length = 61.0 + 11.0 + cap_thickness;
+    let top_z = 68.05;
+    let bottom_z = -14.0;
+    let overall_length = top_z - bottom_z - cap_thickness;
     let mesh = cylinder_shell::make_cylinder_shell(&ShellDimensions {
         angular_resolution: 2 * 12 * 4,
-        outer_radius: 13.0,
-        inner_radius: 11.0,
+        outer_radius: 19.0,
+        inner_radius: 16.5,
         overall_length,
         cap_thickness,
         pin_length: 2.0,
-        pin_tip_z: overall_length - 4.0,
+        pin_tip_z: overall_length - pin_z_adjust,
         pin_slope: 0.5,
     });
 
@@ -302,10 +330,7 @@ pub fn craft_hex_maze<R: rand::Rng>(
         // .map(|(c1, c2)| Edge::<HexCellAddress>(c1, c2))
         .collect();
 
-    edges.push(Edge::<HexCellAddress>(
-        start,
-        HexCellAddress::new(start.u, start.v - 1),
-    ));
+    edges.push(Edge::<HexCellAddress>(start, hex_maze_pre_start(start)));
 
     save_edges_svg(fname, &edges)?;
 
@@ -323,6 +348,10 @@ pub fn craft_hex_maze<R: rand::Rng>(
     )?;
 
     Ok(())
+}
+
+fn hex_maze_pre_start(start: HexCellAddress) -> HexCellAddress {
+    HexCellAddress::new(start.u, start.v - 1)
 }
 
 pub fn craft_square_maze_1<R: rand::Rng>(
@@ -367,12 +396,9 @@ pub fn craft_square_maze_2<R: rand::Rng>(
     output_names: &OutputFileNames,
     rng: &mut R,
     config: &Ini,
+    topology: SquareMazeTopology,
+    cylindrical: CylindricalSpace,
 ) -> Result<(), std::io::Error> {
-    let topology = SquareMazeTopology::new(14, 11);
-    let max_rho = topology.maximum_x();
-
-    let cylindrical = CylindricalSpace { r0: 14.0, max_rho };
-
     let maze_dimensions = config::maze_dimensions_for(config).unwrap();
 
     draw_square_maze(
@@ -411,7 +437,13 @@ pub fn draw_square_maze<R: rand::Rng>(
         // .map(|(c1, c2)| Edge(c1, c2))
         .collect();
 
-    edges.push(Edge(start, SqCellAddress::new(start.u, start.v - 1)));
+    let pre_start = square_maze_pre_start(start);
+    edges.push(Edge(start, pre_start));
+    for i in 0..3 {
+        let v1 = SqCellAddress::new(pre_start.u + i, pre_start.v);
+        let v2 = SqCellAddress::new(pre_start.u + i + 1, pre_start.v);
+        edges.push(Edge(v1, v2));
+    }
 
     save_edges_svg(svg_fname, &edges)?;
 
@@ -429,6 +461,10 @@ pub fn draw_square_maze<R: rand::Rng>(
     )?;
 
     Ok(())
+}
+
+fn square_maze_pre_start(start: SqCellAddress) -> SqCellAddress {
+    SqCellAddress::new(start.u, start.v - 1)
 }
 
 pub fn maze_to_mesh<CA: CellAddress>(

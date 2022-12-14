@@ -86,6 +86,7 @@ impl EdgeCornerMapping<HexCellAddress> for HexMazeEdge {
 
 //
 
+#[derive(Clone)]
 pub struct HexMazeTopology {
     pub after_max_u: i32,
     pub max_y: f32,
@@ -131,11 +132,7 @@ impl HexMazeTopology {
     }
 }
 
-impl<'a> Topology<'a, HexCellAddress> for HexMazeTopology {
-    type IterNeighbors = Box<dyn Iterator<Item = HexCellAddress> + 'a>;
-    type IterAll = Box<dyn Iterator<Item = HexCellAddress> + 'a>;
-    type IterWall = Box<dyn Iterator<Item = HexCellAddress> + 'a>;
-
+impl Topology<HexCellAddress> for HexMazeTopology {
     fn maximum_x(&self) -> f32 {
         self.after_max_u as f32
     }
@@ -144,36 +141,46 @@ impl<'a> Topology<'a, HexCellAddress> for HexMazeTopology {
         self.max_y
     }
 
-    fn neighbors(&'a self, anchor: &HexCellAddress) -> Self::IterNeighbors {
+    fn neighbors(&self, anchor: &HexCellAddress) -> Box<dyn Iterator<Item = HexCellAddress>> {
+        let clone1 = (*self).clone();
+        let clone2 = (*self).clone();
         Box::new(
             anchor
                 .neighbors()
                 .into_iter()
-                .map(|n| self.wrap(n))
-                .filter(|n| self.in_bounds(n)),
+                .map(move |n| clone1.wrap(n))
+                .filter(move |n| clone2.in_bounds(n)),
         )
     }
 
-    fn wall_neighbors(&'a self, anchor: &HexCellAddress) -> Self::IterWall {
+    fn wall_neighbors(&self, anchor: &HexCellAddress) -> Box<dyn Iterator<Item = HexCellAddress>> {
+        let clone1 = (*self).clone();
+        let clone2 = (*self).clone();
         Box::new(
-            anchor
+            (*anchor)
+                .clone()
                 .neighbors()
                 .into_iter()
-                .map(|n| self.wrap(n))
-                .filter(|n| self.wall_bounds(n)),
+                .map(move |n| clone1.wrap(n))
+                .filter(move |n| clone2.wall_bounds(n)),
         )
     }
 
     #[allow(clippy::needless_lifetimes)] // clippy is wrong.  removing the lifetime triggers an error in my version of rust
-    fn all_cells(&'a self) -> Self::IterAll {
+    fn all_cells(&self) -> Box<dyn Iterator<Item = HexCellAddress>> {
         let mut min_v = 0;
-        Box::new((0..self.after_max_u).flat_map(move |u| {
-            if self.wall_bounds(&HexCellAddress::new(u, min_v - 1)) {
+
+        let clone1 = (*self).clone();
+        let after_max_u = self.after_max_u;
+
+        Box::new((0..after_max_u).flat_map(move |u| {
+            if clone1.wall_bounds(&HexCellAddress::new(u, min_v - 1)) {
                 min_v -= 1;
             }
+            let clone2 = clone1.clone();
             (min_v..9999)
                 .map(move |v| HexCellAddress::new(u, v))
-                .take_while(|cell| self.wall_bounds(cell))
+                .take_while(move |cell| clone2.wall_bounds(cell))
         }))
     }
 }

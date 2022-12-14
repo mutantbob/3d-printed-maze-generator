@@ -41,6 +41,7 @@ impl EdgeCornerMapping<SqCellAddress> for Edge<SqCellAddress> {
 
 //
 
+#[derive(Clone)]
 pub struct SquareMazeTopology {
     pub u_count: u32,
     pub v_count: u32,
@@ -79,11 +80,7 @@ impl SquareMazeTopology {
     }
 }
 
-impl<'a> Topology<'a, SqCellAddress> for SquareMazeTopology {
-    type IterNeighbors = Box<dyn Iterator<Item = SqCellAddress> + 'a>;
-    type IterAll = Box<dyn Iterator<Item = SqCellAddress> + 'a>;
-    type IterWall = Box<dyn Iterator<Item = SqCellAddress> + 'a>;
-
+impl Topology<SqCellAddress> for SquareMazeTopology {
     fn maximum_x(&self) -> f32 {
         self.u_count as f32
     }
@@ -92,30 +89,36 @@ impl<'a> Topology<'a, SqCellAddress> for SquareMazeTopology {
         self.v_count as f32
     }
 
-    fn neighbors(&'a self, anchor: &SqCellAddress) -> Self::IterNeighbors {
+    fn neighbors(&self, anchor: &SqCellAddress) -> Box<dyn Iterator<Item = SqCellAddress>> {
+        let clone1 = (*self).clone();
+        let clone2 = (*self).clone();
         Box::new(
             anchor
                 .neighbors()
                 .into_iter()
-                .map(|n| self.wrap(n))
-                .filter(|n| self.in_bounds(n)),
+                .map(move |n| clone1.wrap(n))
+                .filter(move |n| clone2.in_bounds(n)),
         )
     }
 
-    fn wall_neighbors(&'a self, anchor: &SqCellAddress) -> Self::IterWall {
+    fn wall_neighbors(&self, anchor: &SqCellAddress) -> Box<dyn Iterator<Item = SqCellAddress>> {
+        let clone1 = (*self).clone();
+        let clone2 = (*self).clone();
         Box::new(
             anchor
                 .neighbors()
                 .into_iter()
-                .map(|n| self.wrap(n))
-                .filter(|n| self.wall_bounds(n)),
+                .map(move |n| clone1.wrap(n))
+                .filter(move |n| clone2.wall_bounds(n)),
         )
     }
 
     #[allow(clippy::needless_lifetimes)] // clippy is wrong.  removing the lifetime triggers an error in my version of rust
-    fn all_cells(&'a self) -> Self::IterAll {
-        Box::new((0..self.u_count).flat_map(move |u| {
-            (-1..(self.v_count as i32)).map(move |v| SqCellAddress::new(u as i32, v as i32))
+    fn all_cells(&self) -> Box<dyn Iterator<Item = SqCellAddress>> {
+        let u_count = self.u_count;
+        let v_count = self.v_count;
+        Box::new((0..u_count).flat_map(move |u| {
+            (-1..(v_count as i32)).map(move |v| SqCellAddress::new(u as i32, v as i32))
         }))
     }
 }

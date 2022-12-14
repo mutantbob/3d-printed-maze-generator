@@ -2,19 +2,15 @@ use crate::Point3Ds;
 use std::f32::consts::{PI, TAU};
 use std::hash::Hash;
 
-pub trait Topology<'a, CA> {
-    type IterNeighbors: Iterator<Item = CA>;
-    type IterAll: Iterator<Item = CA>;
-    type IterWall: Iterator<Item = CA>;
-
+pub trait Topology<CA> {
     fn maximum_x(&self) -> f32;
     fn maximum_y(&self) -> f32;
 
-    fn neighbors(&'a self, anchor: &CA) -> Self::IterNeighbors;
+    fn neighbors(&self, anchor: &CA) -> Box<dyn Iterator<Item = CA>>;
 
-    fn wall_neighbors(&'a self, anchor: &CA) -> Self::IterWall;
+    fn wall_neighbors(&self, anchor: &CA) -> Box<dyn Iterator<Item = CA>>;
 
-    fn all_cells(&'a self) -> Self::IterAll;
+    fn all_cells(&self) -> Box<dyn Iterator<Item = CA>>;
 }
 
 pub trait Wall {}

@@ -1,6 +1,6 @@
 extern crate core;
 
-use crate::config::{MazeConfig, OutputFileNames};
+use crate::config::MazeConfig;
 use crate::cut::HalfSpace;
 use crate::cylinder_shell::ShellDimensions;
 use crate::maze::{DeepBoundaryPicker, SimpleBoundaryPicker};

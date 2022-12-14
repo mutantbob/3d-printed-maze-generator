@@ -4,8 +4,8 @@ use crate::{
     EdgeCornerMapping, HexCellAddress, MazeWall, Point3Ds, Space, SqCellAddress, Topology,
 };
 
-pub fn compute_walls<'a, TOP: Topology<'a, CA>, CA: CellAddress + PartialEq>(
-    topology: &'a TOP,
+pub fn compute_walls<CA: CellAddress + PartialEq>(
+    topology: &dyn Topology<CA>,
     corridors: &[Edge<CA>],
 ) -> Vec<MazeWall<CA>>
 where
